@@ -1,0 +1,69 @@
+Short:        PC Engine/TurboGrafx-16 emulator
+Author:       Juan Antonio Gomez Galvez (GUS Entertainment), z00p
+Uploader:     Zoopster (JCEC_1@yahoo.co.uk)
+Type:         misc/emu
+Version:      @VERSION@
+Architecture: m68k-amigaos
+Requires:     AGA, 68020 or better (PiStorm or similar for full speed)
+Distribution: Aminet
+Kurz:         PC-Engine/TurboGrafx-16-Emulator
+
+AmiPCEngine is a PC Engine / TurboGrafx-16 emulator for AGA Amigas, by
+Juan Antonio Gomez Galvez and z00p, in 68020+ assembly. It plays HuCard games
+(.pce files). It takes over the machine while a game runs and drives
+the Amiga's custom chips directly, or a Picasso96 (RTG) screen.
+
+History
+-------
+Juan began AmiPC-Engine about 1997; a first version was "abandoned due
+the Amiga AGA limitations". Version 0.1 followed in 2011, and the
+preview 0.3 on Aminet on 30 June 2020 (misc/emu/amipc-engine.lha, 4 of
+6 sound channels, one sprite palette). His later version 0.5 (June
+2021) was never released. In 2026 Juan sent his sources. This community
+update, released with his permission, is built from them and finishes
+what he started: all 6 sound channels with DDA samples, every sprite palette
+on an RTG screen, and full speed on an A1200 with a PiStorm. His
+v0.3 stays on Aminet as it is.
+
+Requirements
+------------
+- An AGA Amiga with a 68020 or better, AmigaOS 3.0 or later.
+- Full speed was measured on an A1200 with a PiStorm (RTG screen). A
+  68030/50 was tested in WinUAE only and plays below full speed.
+- RTG icon: Picasso96 and a 16-bit screen mode. Without them it falls
+  back to the AGA screen.
+
+Installation
+------------
+Unpack the archive anywhere. Start AmiPCEngine (AGA video output) or
+AmiPCEngine RTG (Picasso96 screen, ToolType RTG). Choose Insert, pick a
+.pce file in the Homebrew drawer or anywhere else, then Power ON. Esc
+returns to the menu. See ReadMe.txt in the drawer for the keys and
+pads (keyboard, Amiga joystick, CD32 pad).
+
+No games are included. You need HuCard images of your own, copies you
+may legally have.
+
+Limits
+------
+Not all games work. Not supported: CD-ROM games, SuperGrafx, the
+2.5 MB mapper of Street Fighter II' Champion Edition, Populous's card
+RAM, backup RAM saves. Sound: 6 PSG channels on the Amiga's 4, the
+loudest four at each frame. AGA: one sprite palette shared by all
+sprites. Tested by us on an A1200 with a PiStorm (RTG mostly, AGA
+less) and in WinUAE. Not tested on a real 68030/040/060 card or ECS.
+The full list is in ReadMe.txt.
+
+Credits
+-------
+AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Version
+1.0 by z00p. Web and menu graphics: Multivac. Thanks to Zener and Sandman.
+
+PC Engine is a trademark of NEC and Hudson Soft, TurboGrafx-16 of NEC.
+This program is not affiliated with or endorsed by them.
+
+Reporting problems
+------------------
+Please report a game that misbehaves
+with its name, the icon you used and your machine, at
+https://github.com/z00p/AmiPCEngine/issues

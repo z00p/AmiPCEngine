@@ -1,0 +1,32 @@
+AmiPCEngine debug rows (the "Debug" icons)
+
+Two rows of hex numbers at the top of the screen, updated every 50 Amiga
+vertical blanks (one second on PAL). Times are in scan lines (CIA-B TOD).
+AGA display: a panel above the picture, and the picture moves down; on an
+NTSC screen the bottom 15 lines are cut. RTG display: the same rows drawn
+1:1 on the top 17 lines of the RTG screen (on 960x540 in the border; on
+640x480 over the top 8 lines of a 2x picture).
+
+Is it at full speed? Look at FRMS and VBLS in row 2. If they are equal
+(0032 = 50 each) every emulated frame fitted in one Amiga frame. WAIT
+is the spare time (a high number means plenty of room), and LATE counts
+frames that did not fit.
+
+Row 1:  TOTL WRST OTHR
+  TOTL  lines in the window (NTSC 50 x 262 = 332C, PAL 50 x 313 = 3D22)
+  WRST  longest single frame (one vertical blank = 0106 NTSC, 0139 PAL)
+  OTHR  lines in the rest of the main loop
+
+Row 2:  FRMS VBLS WAIT CPU  BG   SPR  VBLI LATE RTG  COPY
+  FRMS  PCE frames emulated (full speed = VBLS, 0032 = 50)
+  VBLS  Amiga vertical blanks in the window
+  WAIT  lines spent waiting for the next vertical blank (spare time)
+  CPU   lines in the HuC6280 frame
+  BG    lines drawing the background on AGA (0 on RTG)
+  SPR   lines drawing the sprites on AGA (0 on RTG)
+  VBLI  lines in the vertical blank interrupt
+  LATE  frames that took more than one vertical blank
+  RTG   RTG only: lines composing the frame in fast RAM (background, sprites)
+  COPY  RTG only: lines copying the changed lines to the graphics card
+
+Photograph the rows with your report: the game, the icon, the machine.

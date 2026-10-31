@@ -1,0 +1,10 @@
+build/
+release/stage/
+release/drawer/
+release/*.lha
+*.pce
+__pycache__/
+src/embed.i
+src/autopress.i
+src/embed2.i
+src/buildinfo.i
