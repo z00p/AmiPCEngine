@@ -4,6 +4,19 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 1.1
+
+- Street Fighter II' Champion Edition runs (its 2.5 MB mapper), and
+  Populous (the 32 KB of RAM on its card).
+- The Legendary Axe, Magical Chase, The Great Fumo Binning, Special
+  Ninja Squad, Dungeon Explorer's panel and Parasol Stars run or look
+  right, after CPU and VDC fixes (see "Games that now work" below).
+- AGA: colour 0 follows the raster (HuZERO's road, Tongueman's Logic's
+  gradient), and sprites go behind the background on frames where they
+  all ask for it (Parasol Stars' title). No loss of speed on an A1200
+  with a PiStorm.
+- RTG: scanlines Blended light and Blended strong.
+
 ## Sound
 
 - All six PSG channels are played, on the Amiga's four voices: the four
@@ -32,6 +45,11 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 - Sprite colours no longer overwrite background palette 15 (R-Type's
   status bar was solid blue and orange). Colour 0 shows in every
   palette.
+- Colour 0 changes line by line where a game changes it (HuZERO's road,
+  Tongueman's Logic's gradient). The borders go black on those frames.
+- Sprites go behind the background in a frame where every visible
+  sprite asks for that (Parasol Stars' clouds on the title). All
+  sprites share one priority for the frame, so a mix stays in front.
 - Sprites a game parks off-screen (Y beyond line 512) are no longer
   wrapped onto the screen (copies and garbled columns in Beer Girl
   Stadium and Bug Hunt).
@@ -53,9 +71,10 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 - 960x540 is chosen first (an exact 2x of 1080p), then 640x480. 8-bit
   menu screen at double height so the menu fills the screen.
 - Optional scanlines at 2x or more: every other row darkened by 25, 50
-  or 75%, or blended from the lines above and below. ToolType or Shell
-  word `SCANLINES=OFF|25|50|75|BLEND`, or Options > RTG scanlines in the
-  menu; kept by Save Prefs.
+  or 75%, or blended from the lines above and below at three strengths
+  (light, normal, strong). ToolType or Shell word
+  `SCANLINES=OFF|25|50|75|BLENDLIGHT|BLEND|BLENDSTRONG`, or Options > RTG
+  scanlines in the menu; kept by Save Prefs.
 - Without Picasso96, a suitable mode or the memory, it falls back to the
   AGA screen.
 
@@ -98,6 +117,28 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 - TSB, TRB, TST and the read-modify-write instructions reach the VDC and
   the other I/O ports, with the flags the CPU really sets: Parasol
   Stars' title graphics are no longer scrambled.
+- Video memory writes past the last word are lost, as on the console,
+  and no longer wrap round to the start: HuZERO's road is no longer
+  scrambled in play.
+- 384 KB cards are mapped as the console maps them (the last 128 KB at
+  banks $40-$7F): Parasol Stars runs on RTG and its enemies show on AGA.
+  Other cards mirror across all the banks.
+- AGA: a game changing its map size no longer leaves stale tiles on
+  screen (Parasol Stars' levels).
+- Street Fighter II' Champion Edition: the 2.5 MB mapper. The card needs
+  2.5 MB of Fast RAM.
+- Populous: the 32 KB of RAM on its card.
+- The VDC's VRAM-to-VRAM DMA, its end interrupt and the end-of-SAT
+  interrupt: The Legendary Axe and Magical Chase start.
+- The CPU's T flag (SET): The Legendary Axe's map was missing every
+  other column.
+- The CPU's decimal mode, used for scores and timers.
+- A raster interrupt on the vblank line and the vblank are two
+  interrupts, not one: The Great Fumo Binning gets past its title.
+- VRAM reads go through the VDC's read-ahead buffer: Special Ninja
+  Squad's logo unpacks properly.
+- Scroll writes just after a line starts count for the line before:
+  Dungeon Explorer's status panel sits where it should.
 
 ## Controllers
 
@@ -121,8 +162,8 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
 - The Insert requester opens on the Homebrew drawer next to the program
   (v0.5 used a "Cartridges" drawer).
-- The version is 1.0 in the window title, the About box (which now
-  also credits version 1.0) and the `$VER` string, which still said
+- The version is right in the window title, the About box (which now
+  also credits z00p's versions) and the `$VER` string, which still said
   v0.3. The Help Page lists the CD32 pad and joystick buttons as they
   work now.
 - A PC Engine icon, an AGA and an RTG icon, a ReadMe with the keys and

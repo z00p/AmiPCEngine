@@ -70,10 +70,52 @@ PCE_StaBuc:
 	BNE.S	noRasterInt
 	OR.B	#STATUS_RASTER_INT,Status(A3)
 	OR.B	#IRQ1_INT,IRQ_Pending(A3)
+	IFEQ	NO_VDLATE|NO_VDCDMA
+	MOVE.W	D0,RrLine
+	ENDC
 noRasterInt:
 
 
 ; vBlankInt check
+	IFEQ	NO_VDCDMA
+	MOVE.W	VDP_Regs+($0D*2),D2	; vblank after the last display line: VDW + 1
+	AND.W	#$01FF,D2
+	ADDQ.W	#1,D2
+	CMP.W	#128,D2			; R0D not set yet or past the frame: line 251
+	BCS.S	.vdOld
+	CMP.W	#263,D2
+	BCS.S	.vdCmp
+.vdOld:	MOVE.W	#(240+11),D2
+.vdCmp:	MOVE.W	D2,VblLine
+	CMP.W	D2,D0
+	IFEQ	NO_VDLATE
+; RCR on the vblank line: the raster IRQ comes first, the vblank later in that line, as two IRQs
+; (fumobinning's handler looks at RR and, only without it, at VD). One line on: the next PCE line.
+	BEQ.S	.vdNow
+	CMP.W	VdLate,D0
+	BNE.S	.vdNo
+	MOVE.W	#-1,VdLate
+	BRA.S	.vdRun
+.vdNow:	CMP.W	RrLine,D0
+	BNE.S	.vdRun
+	MOVE.W	#-1,RrLine
+	ADDQ.W	#1,D2
+	MOVE.W	D2,VdLate
+	BRA.S	.vdNo
+.vdRun:
+	ELSE
+	BNE.S	.vdNo
+	ENDC
+	BSR	VdcVblank
+.vdNo:	TST.B	SatbWait		; the SAT DMA ends a few lines into the vblank
+	BEQ.S	noVblankInt
+	SUBQ.B	#1,SatbWait
+	BNE.S	noVblankInt
+	BTST	#0,VDP_Regs+1+($0F*2)
+	BEQ.S	noVblankInt
+	OR.B	#$08,Status(A3)
+	OR.B	#IRQ1_INT,IRQ_Pending(A3)
+	ELSE
 	BTST	#3,VDP_Regs+1+(5*2)	; (Están invertidos)
 	BEQ.S	noVblankInt
 	IFEQ	NO_VBLLINE
@@ -121,6 +163,7 @@ noRasterInt:
 
 	MOVEM.L	(SP)+,D0/A0/A1
 	ENDC
+	ENDC
 noVblankInt:
 
 
@@ -164,6 +207,9 @@ noVblankInt:
 
 
 	lea	Regs,A3
+	IFEQ	NO_BGLINE|NO_BGMASK
+	JSR	BgLogSwap		; before the scroll list is offered to the vblank
+	ENDC
 	movem.l	ScrollChangesNow(a3),d0/d1
 	exg.l	d0,d1
 	movem.l	d0/d1,ScrollChangesNow(a3)

@@ -36,9 +36,9 @@ Contents
   * A1200 with a PiStorm, RTG screen: five test games ran at full
     speed (every emulated frame in one Amiga frame, over 1500 to 2400
     frames each).
-  * A1200 with a PiStorm, AGA screen: R-Type, HuZERO and PCE Invaders
-    at full speed; Parodius Da! dropped 182 of 2400 frames and
-    Soldier Blade 134 of 1500 (measured on 31 Oct 2026).
+  * A1200 with a PiStorm, AGA screen: Street Fighter II' at 99% of
+    full speed, Parasol Stars 96%, Soldier Blade 92%, Parodius Da!
+    91%, HuZERO in play 89% (measured on 2 Nov 2026).
   * 68030 at 50 MHz: tested in WinUAE only, not on a real machine.
     There the same games ran at roughly 30% to 90% of full speed on
     the AGA screen, depending on the game (HuZERO slowest, PCE
@@ -86,13 +86,15 @@ enough memory, the program carries on in AGA mode.
 
 ToolTypes (in the icon's Information window):
   RTG        use the Picasso96 screen
-  SCANLINES=OFF|25|50|75|BLEND
+  SCANLINES=OFF|25|50|75|BLENDLIGHT|BLEND|BLENDSTRONG
              RTG only, at 2x or more: every other screen row darkened
-             by 25, 50 or 75 percent, or BLEND (the dark row mixes the
-             lines above and below it). OFF is the default. The same
-             setting is in the menu: Options > RTG scanlines (ghosted
-             without RTG); it is kept by Save Prefs. A SCANLINES
-             ToolType or Shell word wins over the saved prefs.
+             by 25, 50 or 75 percent, or blended: the dark row is the
+             mix of the lines above and below it, at 75 percent
+             brightness for BLENDLIGHT, 50 for BLEND and 25 for
+             BLENDSTRONG. OFF is the default. The same setting is in
+             the menu: Options > RTG scanlines (ghosted without RTG);
+             it is kept by Save Prefs. A SCANLINES ToolType or Shell
+             word wins over the saved prefs.
 
 From a Shell: AmiPCEngine RTG   (the word RTG, as the ToolType)
               AmiPCEngine RTG SCANLINES=50
@@ -124,7 +126,8 @@ Joy-Control    the controller type, see below. The Port gadget is left
 Project menu   About, Help Page, Menu Screen, Save Prefs, Quit.
 Cartridges     Insert Cartridge, Eject Cartridge.
 
-Options > RTG scanlines (Off, Hard 25%, Hard 50%, Hard 75%, Blended)
+Options > RTG scanlines (Off, Hard 25%, Hard 50%, Hard 75%, Blended
+               light, Blended, Blended strong)
                see SCANLINES in section 3. A new setting applies at
                the next Power ON or Continue.
 
@@ -192,13 +195,13 @@ Tested
 Not supported (there is no code for them)
   * CD-ROM, Super CD-ROM and Arcade Card games. HuCards only.
   * SuperGrafx games (no second VDC or priority chip).
-  * The 2.5 MB mapper of Street Fighter II' Champion Edition (it
-    stays on a black screen), and the card RAM Populous needs.
-  * VDC VRAM-to-VRAM DMA, the sprite overflow and collision flags,
-    multitap, the 6-button pad. Backup RAM is not saved.
-  * On AGA, sprite priority; every sprite shares one set of colours,
-    so some come out wrong (R-Type, the power meter in Parodius Da!).
-    RTG handles both.
+  * The sprite overflow and collision flags, multitap, the 6-button
+    pad. Backup RAM is not saved.
+  * On AGA, sprite priority per sprite: all sprites go behind the
+    background only in a frame where every one of them asks for it,
+    otherwise all stay in front. Every sprite shares one set of
+    colours, so some come out wrong (R-Type, the power meter in
+    Parodius Da!, the Earth on HuZERO's title). RTG handles both.
 
 Sound
   Six PSG channels play on the Amiga's four, the four loudest at each
@@ -219,21 +222,16 @@ Known faults
     not Run (as on the real console).
   * Sprites can flicker or tear on AGA: the picture is drawn while it
     is on screen (one buffer). RTG does not do this.
-  * AGA: Soldier Blade's intro shows black where Mesen shows dark
-    teal bands.
   * Games 256 pixels wide look narrow on an RTG screen at plain 2x.
   * Beer Girl Stadium: a few sprite colours differ from Mesen.
-  * Parasol Stars: on RTG, after the title scrolls away the screen
-    stays blank for about 20 seconds or more, where Mesen starts its
-    demo after about 2 seconds. On the AGA screen it starts, but the
-    enemies are missing and the level can lose its platforms, so it
-    is not playable yet.
-  * Soldier Blade: a white line can show across the picture (seen
-    while the game ran on its own, on RTG).
-  * HuZERO: on AGA the striped logo is one colour (the mid-frame
-    palette changes are shown on RTG only); on RTG the picture sits
-    one line lower than in Mesen. In play, bands of scrambled tiles
-    cover the lower part of the screen around the car.
+  * Parasol Stars on AGA: sprites use one palette, so the player's
+    colours are wrong.
+  * On AGA only colour 0 follows mid-frame changes: HuZERO's road and
+    Tongueman's Logic's gradient do, HuZERO's striped logo does not.
+    RTG shows them all.
+  * Tongueman's Logic on AGA: the sprite scenery shows over the
+    background during the title's transition.
+  * Street Fighter II': the card takes 2.5 MB of Fast RAM.
 
 
 8. History
@@ -253,6 +251,7 @@ Known faults
          started: all
          six sound channels, DDA samples, every sprite palette on an
          RTG screen, and full speed on an A1200 with a PiStorm.
+         Version 1.0 came out on 31 October, 1.1 on 2 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -266,7 +265,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Version 1.0            z00p
+  Versions 1.0 and 1.1   z00p
   Web and menu graphics  Multivac
   With thanks to         Zener and Sandman
   Built with             Devpac III (HiSoft) and GadToolsBox (Jaba
@@ -281,8 +280,8 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Version 1.0, by z00p, is a community update made and
-published with his permission.
+Entertainment). Versions 1.0 and 1.1, by z00p, are community updates
+made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used
 AmiPCEngine or AmiPCEngine RTG, your machine (CPU, accelerator or

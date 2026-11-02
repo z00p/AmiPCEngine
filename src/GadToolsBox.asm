@@ -717,10 +717,18 @@ MainMenuWTitle:
 	INCLUDE	"buildinfo.i"		; written by build.sh / build_embed.sh: date and commit
 	ELSE
 	IFEQ	NO_REL10
+	IFEQ	NO_REL11
+	IFNE	DbgRows
+    DC.B    'AmiPC-Engine Emulator v1.1  (Debug rows)',0
+	ELSE
+    DC.B    'AmiPC-Engine Emulator v1.1',0
+	ENDC
+	ELSE
 	IFNE	DbgRows
     DC.B    'AmiPC-Engine Emulator v1.0  (Debug rows)',0
 	ELSE
     DC.B    'AmiPC-Engine Emulator v1.0',0
+	ENDC
 	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v0.5',0
@@ -1635,6 +1643,16 @@ HelpPageIText22:
     CNOP    0,2
 
 	IFEQ	NO_REL10
+	IFEQ	NO_REL11
+AboutIText0:
+    DC.B    'AmiPC-Engine Emulator v1.1',0
+
+AboutIText1:
+    DC.B    '(2 November 2026)',0
+
+AboutITextZ:
+    DC.B    'Version 1.1: z00p',0
+	ELSE
 AboutIText0:
     DC.B    'AmiPC-Engine Emulator v1.0',0
 
@@ -1643,6 +1661,7 @@ AboutIText1:
 
 AboutITextZ:
     DC.B    'Version 1.0: z00p',0
+	ENDC
 	ELSE
 AboutIText0:
     DC.B    'AmiPC-Engine Emulator v0.5',0
@@ -2001,7 +2020,44 @@ MainMenuNewMenuSI:              ; RTG scanlines (ghosted without RTG: RtgScanMen
     DC.L    0
     DC.W    0
     DC.L    0,0
-MainMenuNewMenuS0:              ; the five: CHECKIT, one ticked (RtgScanFlags)
+MainMenuNewMenuS0:              ; the settings: CHECKIT, one ticked (RtgScanFlags)
+    IFEQ    NO_BLENDLV
+    DC.B    3,0
+    DC.L    MainMenuMNameS0
+    DC.L    0
+    DC.W    $0001
+    DC.L    $7E,0
+    DC.B    3,0
+    DC.L    MainMenuMNameS1
+    DC.L    0
+    DC.W    $0001
+    DC.L    $7D,0
+    DC.B    3,0
+    DC.L    MainMenuMNameS2
+    DC.L    0
+    DC.W    $0001
+    DC.L    $7B,0
+    DC.B    3,0
+    DC.L    MainMenuMNameS3
+    DC.L    0
+    DC.W    $0001
+    DC.L    $77,0
+    DC.B    3,0
+    DC.L    MainMenuMNameS5
+    DC.L    0
+    DC.W    $0001
+    DC.L    $6F,0
+    DC.B    3,0
+    DC.L    MainMenuMNameS4
+    DC.L    0
+    DC.W    $0001
+    DC.L    $5F,0
+    DC.B    3,0
+    DC.L    MainMenuMNameS6
+    DC.L    0
+    DC.W    $0001
+    DC.L    $3F,0
+    ELSE
     DC.B    3,0
     DC.L    MainMenuMNameS0
     DC.L    0
@@ -2027,6 +2083,7 @@ MainMenuNewMenuS0:              ; the five: CHECKIT, one ticked (RtgScanFlags)
     DC.L    0
     DC.W    $0001
     DC.L    $0F,0
+    ENDC
     ENDC
 
     DC.B    0,0
@@ -2175,6 +2232,12 @@ MainMenuMNameS3:
     DC.B    'Hard 75%',0
 MainMenuMNameS4:
     DC.B    'Blended',0
+    IFEQ    NO_BLENDLV
+MainMenuMNameS5:
+    DC.B    'Blended light',0
+MainMenuMNameS6:
+    DC.B    'Blended strong',0
+    ENDC
     ENDC
 
     CNOP    0,2

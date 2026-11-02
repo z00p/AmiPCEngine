@@ -34,8 +34,15 @@
 
 CPU_Init:
 	BSR	CreaTablaFlags
+	IFEQ	NO_BCD
+	MOVEQ	#0,D1
+	BSR	DecSwitch		; a reload during a decimal stretch
+	ENDC
 
 	BCLR	#1,IOAM+$1402		; IRQ1 Interrupt Enabled? == 0
+	IFEQ	NO_IOREAD
+	CLR.B	IOAM+$1402		; all three enabled at reset, as Mesen's
+	ENDC
 	IFEQ	NO_CSL
 	ST	CpuSlow			; the HuC6280 starts at 1.79 MHz (games set CSH)
 	ENDC
@@ -197,6 +204,27 @@ UpdateFlags:	MACRO
 	SVS	VFF(A3)
 	BCHG	#0,D3
 	ENDC
+
+	IFC	"DVZC","\1"		; ABCD: N undefined, here it is the result's
+	MOVE.W	CCR,D3
+	SVS	VFF(A3)
+	BCLR	#3,D3
+	TST.B	D7
+	BPL.S	\@p
+	BSET	#3,D3
+\@p:
+	ENDC
+
+	IFC	"DVZn","\1"		; SBCD
+	MOVE.W	CCR,D3
+	SVS	VFF(A3)
+	BCHG	#0,D3
+	BCLR	#3,D3
+	TST.B	D7
+	BPL.S	\@p
+	BSET	#3,D3
+\@p:
+	ENDC
 	ENDM
 
 ; --------------------------------------------
@@ -332,6 +360,14 @@ TakeInterrupt:
 
 	ST	IFF(A3)			; ( DI ) Interrupciones OFF.
 	SF	DFF(A3)
+	IFEQ	NO_BCD
+	SF	BFF(A3)			; the D bit of a push (see DecPop)
+	TST.B	DecMode
+	BEQ.S	.noDec
+	MOVEQ	#0,D1
+	BSR	DecSwitch
+.noDec:
+	ENDC
 
 	IFEQ	NO_TIMER
 	MOVE.W	IntVector,D1
@@ -392,7 +428,12 @@ MIns:	MACRO
 	ENDC
 ;ius
 	UpdateFlags	\5			; Recoge Flags.
+	IFC	"T","\8"
+	MOVEQ	#\7,D1
+	BRA	SetDone
+	ELSEIF
 	NextOP	\7
+	ENDC
 	ENDC
 
 
@@ -416,7 +457,12 @@ MIns:	MACRO
 	\1	D1,\2
 	ENDC
 	UpdateFlags	\5			; Recoge Flags.
+	IFC	"T","\8"
+	MOVEQ	#\7,D1
+	BRA	SetDone
+	ELSEIF
 	NextOP	\7
+	ENDC
 	ENDC
 
 
@@ -449,7 +495,12 @@ MIns:	MACRO
 	\1	D1,\2
 	ENDC
 	UpdateFlags	\5			; Recoge Flags.
+	IFC	"T","\8"
+	MOVEQ	#\7,D1
+	BRA	SetDone
+	ELSEIF
 	NextOP	\7
+	ENDC
 	ENDC
 
 
@@ -473,7 +524,12 @@ MIns:	MACRO
 	\1	D1,\2
 	ENDC
 	UpdateFlags	\5			; Recoge Flags.
+	IFC	"T","\8"
+	MOVEQ	#\7,D1
+	BRA	SetDone
+	ELSEIF
 	NextOP	\7
+	ENDC
 	ENDC
 
 
@@ -497,7 +553,12 @@ MIns:	MACRO
 	\1	D1,\2
 	ENDC
 	UpdateFlags	\5			; Recoge Flags.
+	IFC	"T","\8"
+	MOVEQ	#\7,D1
+	BRA	SetDone
+	ELSEIF
 	NextOP	\7
+	ENDC
 	ENDC
 
 	ENDM
@@ -1435,6 +1496,9 @@ RTInn:
 	BFINS	D2,DFF(A3){0:1}
 	LSR.B	#2,D2
 	SCS	VFF(A3)
+	IFEQ	NO_BCD
+	BSR	DecPop
+	ENDC
 
 	MOVE.B	(Flags_Pop.w,PC,D3.W),D3
 ;	AND.B	#$0D,D3
@@ -1579,6 +1643,9 @@ PLPnn:
 	BFINS	D2,DFF(A3){0:1}
 	LSR.B	#2,D2
 	SCS	VFF(A3)
+	IFEQ	NO_BCD
+	BSR	DecPop
+	ENDC
 
 	MOVE.B	(Flags_Pop.w,PC,D3.W),D3
 	AND.B	#$0D,D3
@@ -1654,14 +1721,213 @@ CLVnn:
 	SF	VFF(A3)
 	NextOP	2
 CLDnn:
+	IFEQ	NO_BCD
+	SF	BFF(A3)
+	TST.B	DecMode
+	BEQ.S	.cld
+	MOVEQ	#0,D1
+	BSR	DecSwitch
+.cld:
+	ELSE
 	AND.B	#$7F,DFF(A3)
+	ENDC
 	NextOP	2
 SEDnn:
+	IFEQ	NO_BCD
+	ST	BFF(A3)
+	TST.B	DecMode
+	BNE.S	.sed
+	MOVEQ	#-1,D1
+	BSR	DecSwitch
+.sed:
+	ELSE
 	OR.B	#$7F,DFF(A3)
+	ENDC
 	NextOP	2
 
+	IFEQ	NO_BCD
+; Decimal mode costs nothing while it is off: SED points the 18 ADC/SBC slots of Instr at
+; the ABCD/SBCD handlers, CLD, an interrupt, RTI or PLP point them back.
+; The D of a push is taken from BFF's byte and the B from DFF's (masks in PHPnn and the
+; interrupt entry), so here BFF = D, as a pop leaves it.
+DecPop:					; D3 = the P just popped
+	BTST	#4,D3
+	SNE	DFF(A3)
+	BTST	#3,D3
+	SNE	D1
+	MOVE.B	D1,BFF(A3)
+	CMP.B	DecMode,D1
+	BNE.S	DecSwitch
+	RTS
+
+DecSwitch:				; D1.B = 0 binary, $FF decimal. D0, D1, A4
+	MOVE.B	D1,DecMode
+	MOVE.L	A0,-(SP)
+	LEA	DecBin(PC),A0
+	TST.B	D1
+	BEQ.S	.bin
+	LEA	DecDec(PC),A0
+.bin:
+	LEA	DecOps(PC),A4
+	MOVEQ	#18-1,D1
+.lp:
+	MOVEQ	#0,D0
+	MOVE.B	(A4)+,D0
+	MOVE.L	(A0)+,(Instr.L,D0.W*4)
+	DBRA	D1,.lp
+	MOVE.L	(SP)+,A0
+	RTS
+
+DecMode:	DC.B	0,0
+DecOps:	DC.B	$69,$6D,$7D,$79,$65,$75,$61,$71,$72
+	DC.B	$E9,$ED,$FD,$F9,$E5,$F5,$E1,$F1,$F2
+DecBin:	DC.L	ADCin,ADCab,ADCax,ADCay,ADCzp,ADCzx,ADCix,ADCiy,ADCim
+	DC.L	SBCin,SBCab,SBCax,SBCay,SBCzp,SBCzx,SBCix,SBCiy,SBCim
+DecDec:	DC.L	DADin,DADab,DADax,DADay,DADzp,DADzx,DADix,DADiy,DADim
+	DC.L	DSBin,DSBab,DSBax,DSBay,DSBzp,DSBzx,DSBix,DSBiy,DSBim
+
+DADin:	MIns	ABCD.B,D7,vv,in,DVZC,C,2
+DADab:	MIns	ABCD.B,D7,nn,ab,DVZC,C,5
+DADax:	MIns	ABCD.B,D7,D4,ab,DVZC,C,5
+DADay:	MIns	ABCD.B,D7,D5,ab,DVZC,C,5
+DADzp:	MIns	ABCD.B,D7,nn,zp,DVZC,C,4
+DADzx:	MIns	ABCD.B,D7,D4,zp,DVZC,C,4
+DADix:	MIns	ABCD.B,D7,D4,ix,DVZC,C,7
+DADiy:	MIns	ABCD.B,D7,D5,iy,DVZC,C,7
+DADim:	MIns	ABCD.B,D7,im,zp,DVZC,C,7
+DSBin:	NOT.B	D3
+	MIns	SBCD.B,D7,vv,in,DVZn,C,2
+DSBab:	NOT.B	D3
+	MIns	SBCD.B,D7,nn,ab,DVZn,C,5
+DSBax:	NOT.B	D3
+	MIns	SBCD.B,D7,D4,ab,DVZn,C,5
+DSBay:	NOT.B	D3
+	MIns	SBCD.B,D7,D5,ab,DVZn,C,5
+DSBzp:	NOT.B	D3
+	MIns	SBCD.B,D7,nn,zp,DVZn,C,4
+DSBzx:	NOT.B	D3
+	MIns	SBCD.B,D7,D4,zp,DVZn,C,4
+DSBix:	NOT.B	D3
+	MIns	SBCD.B,D7,D4,ix,DVZn,C,7
+DSBiy:	NOT.B	D3
+	MIns	SBCD.B,D7,D5,iy,DVZn,C,7
+DSBim:	NOT.B	D3
+	MIns	SBCD.B,D7,im,zp,DVZn,C,7
+	ENDC
+
 SETnn:
+	IFEQ	NO_TFLAG
+; T flag: the next instruction, if ORA/AND/EOR/ADC, works on zero page byte X in place of A
+; and leaves A alone (Legendary Axe builds its BAT addresses this way). It is one step
+; with SET, so no flag to test on the hot path and no IRQ can fall in between.
+	MOVEQ	#0,D0
+	MOVE.B	(A5),D0
+	MOVE.B	D0,D1
+	AND.B	#$83,D1
+	CMP.B	#$01,D1			; 0aaabbb01: the eight modes
+	BNE.S	.setz
+	LSR.B	#2,D0
+	BRA.S	.setgo
+.setz:
+	MOVE.B	D0,D1
+	AND.B	#$9F,D1
+	CMP.B	#$12,D1			; 0aa10010: (zp)
+	BNE.S	.setno
+	LSR.B	#5,D0
+	ADD.B	#32,D0
+.setgo:
+	IFEQ	NO_BCD
+	TST.B	DecMode
+	BEQ.S	.setbin
+	CMP.B	#35,D0			; ADC (zp)
+	BNE.S	.setdec
+	MOVEQ	#44,D0
+	BRA.S	.setbin
+.setdec:
+	MOVE.B	D0,D1
+	AND.B	#$38,D1
+	CMP.B	#$18,D1			; ADC, the eight modes
+	BNE.S	.setbin
+	ADD.B	#12,D0
+.setbin:
+	ENDC
+	ADDQ.L	#1,A5
+	MOVE.B	D7,SetSaveA
+	MOVEQ	#0,D1
+	MOVE.B	D4,D1
+	MOVE.B	(IRAM,D1.L),D7
+	MOVE.L	(SetTab.L,D0.W*4),A4
+	JMP	(A4)
+.setno:
+	ENDC
 	NextOP	2
+
+	IFEQ	NO_TFLAG
+SetDone:				; D1 = the instruction's cycles
+	MOVEQ	#0,D0
+	MOVE.B	D4,D0
+	MOVE.B	D7,(IRAM,D0.L)
+	MOVE.B	SetSaveA,D7
+	ADDQ.W	#5,D1			; SET 2, T 3
+	NextOP	D1
+
+SetSaveA:	DC.B	0,0
+
+T_ORAix: MIns	OR.B,D7,D4,ix,NxZx,N,7,T
+T_ORAzp: MIns	OR.B,D7,nn,zp,NxZx,N,4,T
+T_ORAin: MIns	OR.B,D7,vv,in,NxZx,N,2,T
+T_ORAab: MIns	OR.B,D7,nn,ab,NxZx,N,5,T
+T_ORAiy: MIns	OR.B,D7,D5,iy,NxZx,N,7,T
+T_ORAzx: MIns	OR.B,D7,D4,zp,NxZx,N,4,T
+T_ORAay: MIns	OR.B,D7,D5,ab,NxZx,N,5,T
+T_ORAax: MIns	OR.B,D7,D4,ab,NxZx,N,5,T
+T_ORAim: MIns	OR.B,D7,im,zp,NxZx,N,7,T
+T_ANDix: MIns	AND.B,D7,D4,ix,NxZx,N,7,T
+T_ANDzp: MIns	AND.B,D7,nn,zp,NxZx,N,4,T
+T_ANDin: MIns	AND.B,D7,vv,in,NxZx,N,2,T
+T_ANDab: MIns	AND.B,D7,nn,ab,NxZx,N,5,T
+T_ANDiy: MIns	AND.B,D7,D5,iy,NxZx,N,7,T
+T_ANDzx: MIns	AND.B,D7,D4,zp,NxZx,N,4,T
+T_ANDay: MIns	AND.B,D7,D5,ab,NxZx,N,5,T
+T_ANDax: MIns	AND.B,D7,D4,ab,NxZx,N,5,T
+T_ANDim: MIns	AND.B,D7,im,zp,NxZx,N,7,T
+T_EORix: MIns	EOR.B,D7,D4,ix,NxZx,E,7,T
+T_EORzp: MIns	EOR.B,D7,nn,zp,NxZx,E,4,T
+T_EORin: MIns	EOR.B,D7,vv,in,NxZx,E,2,T
+T_EORab: MIns	EOR.B,D7,nn,ab,NxZx,E,5,T
+T_EORiy: MIns	EOR.B,D7,D5,iy,NxZx,E,7,T
+T_EORzx: MIns	EOR.B,D7,D4,zp,NxZx,E,4,T
+T_EORay: MIns	EOR.B,D7,D5,ab,NxZx,E,5,T
+T_EORax: MIns	EOR.B,D7,D4,ab,NxZx,E,5,T
+T_EORim: MIns	EOR.B,D7,im,zp,NxZx,E,7,T
+T_ADCix: MIns	ADDX.B,D7,D4,ix,NVZC,C,7,T
+T_ADCzp: MIns	ADDX.B,D7,nn,zp,NVZC,C,4,T
+T_ADCin: MIns	ADDX.B,D7,vv,in,NVZC,C,2,T
+T_ADCab: MIns	ADDX.B,D7,nn,ab,NVZC,C,5,T
+T_ADCiy: MIns	ADDX.B,D7,D5,iy,NVZC,C,7,T
+T_ADCzx: MIns	ADDX.B,D7,D4,zp,NVZC,C,4,T
+T_ADCay: MIns	ADDX.B,D7,D5,ab,NVZC,C,5,T
+T_ADCax: MIns	ADDX.B,D7,D4,ab,NVZC,C,5,T
+T_ADCim: MIns	ADDX.B,D7,im,zp,NVZC,C,7,T
+
+SetTab:	DC.L	T_ORAix,T_ORAzp,T_ORAin,T_ORAab,T_ORAiy,T_ORAzx,T_ORAay,T_ORAax
+	DC.L	T_ANDix,T_ANDzp,T_ANDin,T_ANDab,T_ANDiy,T_ANDzx,T_ANDay,T_ANDax
+	DC.L	T_EORix,T_EORzp,T_EORin,T_EORab,T_EORiy,T_EORzx,T_EORay,T_EORax
+	DC.L	T_ADCix,T_ADCzp,T_ADCin,T_ADCab,T_ADCiy,T_ADCzx,T_ADCay,T_ADCax
+	DC.L	T_ORAim,T_ANDim,T_EORim,T_ADCim
+	IFEQ	NO_BCD
+	DC.L	T_DADix,T_DADzp,T_DADin,T_DADab,T_DADiy,T_DADzx,T_DADay,T_DADax,T_DADim
+T_DADix: MIns	ABCD.B,D7,D4,ix,DVZC,C,7,T
+T_DADzp: MIns	ABCD.B,D7,nn,zp,DVZC,C,4,T
+T_DADin: MIns	ABCD.B,D7,vv,in,DVZC,C,2,T
+T_DADab: MIns	ABCD.B,D7,nn,ab,DVZC,C,5,T
+T_DADiy: MIns	ABCD.B,D7,D5,iy,DVZC,C,7,T
+T_DADzx: MIns	ABCD.B,D7,D4,zp,DVZC,C,4,T
+T_DADay: MIns	ABCD.B,D7,D5,ab,DVZC,C,5,T
+T_DADax: MIns	ABCD.B,D7,D4,ab,DVZC,C,5,T
+T_DADim: MIns	ABCD.B,D7,im,zp,DVZC,C,7,T
+	ENDC
+	ENDC
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

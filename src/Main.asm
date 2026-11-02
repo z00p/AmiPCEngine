@@ -157,6 +157,9 @@ MenuShow=0		; 1 About, 2 Help Page, 3 error window, 4 Insert file requester, 5 C
 	IFND	StateDump	; AutoExit test builds: at exit write IRAM, VRAM, VDC regs, palette, SAT copy to PROGDIR:pcestate.bin
 StateDump=0
 	ENDC
+	IFND	VdcLog	; StateDump test builds: VDC register writes (not R2/6/7/8) with frame, line, PC, MPRs after pcestate.bin
+VdcLog=0
+	ENDC
 	IFND	ScrDump	; AutoExit test builds: the scroll log (line, BXR, BYR) of 1000 frames from frame ScrDump -> PROGDIR:scrdump.bin
 ScrDump=0
 	ENDC
@@ -217,11 +220,65 @@ NO_SCANLINES=0
 	IFND	NO_RTIIRQ	; 1 = RTI does not check for a pending interrupt (one raised during a handler waits for the next line: Parodius HUD split 1 line late)
 NO_RTIIRQ=0
 	ENDC
+	IFND	NO_VRAMEND	; 1 = VRAM writes past word $7FFF wrap to word 0 (the VDC drops them: HuZERO road)
+NO_VRAMEND=0
+	ENDC
+	IFND	NO_BATSIZE	; 1 = AGA: no redraw when the BAT size changes (Parasol Stars: map tiles left in the level)
+NO_BATSIZE=0
+	ENDC
+	IFND	NO_ROMMAP	; 1 = ROM banks only as far as the file goes, no mirrors, 384 KB cards not split
+NO_ROMMAP=0
+	ENDC
+	IFND	NO_BLENDLV	; 1 = one Blended scanline setting, quarter + quarter rounded down (no Blended light / strong)
+NO_BLENDLV=0
+	ENDC
+	IFND	NO_SF2	; 1 = no Street Fighter II' mapper: a card over 1 MB fills DirMappers past its end
+NO_SF2=0
+	ENDC
+	IFND	NO_POPRAM	; 1 = no 32 KB RAM at banks $40-$43 on the Populous card
+NO_POPRAM=0
+	ENDC
+	IFND	NO_VDCDMA	; 1 = no VRAM-VRAM DMA, no DMA-end IRQs, SAT copied at the vblank only with the vblank IRQ on
+NO_VDCDMA=0
+	ENDC
+	IFND	NO_TFLAG	; SET: the next ORA/AND/EOR/ADC works on zero page byte X (it was a NOP). Legendary Axe's map
+NO_TFLAG=0
+	ENDC
+	IFND	NO_BCD	; decimal mode: SED makes ADC and SBC BCD (it was ignored). Score counters
+NO_BCD=0
+	ENDC
+	IFND	NO_VDLATE	; RCR on the vblank line: VD one line after RR, two IRQs (they were one, status $24). fumobinning
+NO_VDLATE=0
+	ENDC
+	IFND	NO_VDCREAD	; VRAM reads go through the VDC's read-ahead buffer (they read VRAM at once). ninjabutai's logo
+NO_VDCREAD=0
+	ENDC
+	IFND	NO_BGMASK	; 1 = on AGA a BG pixel of value 0 is index 16 x palette (NO_BGCOL0 copies colour 0 to those slots); 0 = truly index 0
+NO_BGMASK=0
+	ENDC
+	IFND	NO_BGLINE	; 1 = AGA colour 0 once a frame; 0 = line by line (HuZERO's road, Tongueman's Logic). Needs NO_BGMASK=0
+NO_BGLINE=0
+	ENDC
+	IFND	NO_SPRBACK	; 1 = AGA sprites always over the BG; 0 = behind it in a frame where all visible sprites ask for that. Needs NO_BGMASK=0
+NO_SPRBACK=0
+	ENDC
+	IFND	NO_IOREAD	; I/O read-backs as Mesen's: $1000 bits 4-5, $0405 bits 1-7, $0001 = 0, $1402 = 0 at reset
+NO_IOREAD=0
+	ENDC
+	IFND	NO_PSGBASS	; 0 = a bass tone (F >= $300, under 190 Hz) outranks a louder chord note for the four Paula voices. OFF by default: for John's ears
+NO_PSGBASS=1
+	ENDC
+	IFND	NO_RCRLATE	; 1 = a scroll write early in a line counts for the line after it, however early
+NO_RCRLATE=0
+	ENDC
+	IFND	NO_REL11	; 1 = 1.0 version texts
+NO_REL11=0
+	ENDC
 	IFND	NO_REL10	; 1 = v0.5 texts: $VER v0.3, About v0.5 without the 1.0 line, screen title 2021, Juan's Help Page pad lines
 NO_REL10=0
 	ENDC
 ScanOff=NO_SCANLINES|NO_RTG|NO_RTGFIX	; the scanline code is in RTG.asm (needs the AllocMem'd buffers)
-	IFND	SCANDEF	; test builds: the scanline setting before prefs / ToolType (0 Off, 1-3 = 25/50/75%, 4 Blended)
+	IFND	SCANDEF	; test builds: the scanline setting before prefs / ToolType (0 Off, 1-3 = 25/50/75%, 4 Blended, 5 light, 6 strong)
 SCANDEF=0
 	ENDC
 TallOff=NO_TALLMENU|NO_RTG|NO_RTGFIX	; the tall menu code is in RTG.asm
@@ -261,7 +318,11 @@ TallImgJmp:	MACRO
 	ENDM
 ; CopperScrolls worst case: 320 entries (ScrollChangesBuf) x 2 SetScrollAtRender
 ; calls x 76 bytes, plus the end words. The loop stops CopScrollSlack early.
+	IFEQ	NO_BGLINE|NO_BGMASK
+CopScrollSlack=176+(224*12)+8	; every colour entry: WAIT + WAIT over line 255 + MOVE
+	ELSE
 CopScrollSlack=176
+	ENDC
 CopScrollMax=(320*2*76)+CopScrollSlack
 	IFND	AutoExit	; test runs: exit after this many frames, write PROGDIR:AmiPCE.result
 AutoExit=0
@@ -319,7 +380,11 @@ NF_Menu:
 
 	CNOP	0,8
 	IFEQ	NO_REL10
+	IFEQ	NO_REL11
+	DC.B	"$VER:AmiPC-Engine Emulator v1.1 (2.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.0 (31.10.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v0.3 (30.6.20)",0,0
 	ENDC
@@ -398,6 +463,9 @@ RestartGame:
 	MOVE.L	ScrollChangesNow(A3),ScrollChangesIndex(A3)
 	move.w	#-1,ScrollChangesBufA
 	move.w	#-1,ScrollChangesBufB
+	IFEQ	NO_BGLINE|NO_BGMASK
+	JSR	BgLogInit
+	ENDC
 
 
 	MOVE.L	DirCart,A0
@@ -1467,7 +1535,55 @@ ScrDumpWrite:
 	IFNE	StateDump
 StateDumpName:	DC.B	"PROGDIR:pcestate.bin",0
 	EVEN
-StateDumpTab:	DC.L	IRAM,8*1024, VRAM,64*1024, VDP_Regs,64, VDP_Pal,1024, SpriteCoor,512, 0
+StateDumpTab:	DC.L	IRAM,8*1024, VRAM,64*1024, VDP_Regs,64, VDP_Pal,1024, SpriteCoor,512
+	IFNE	VdcLog
+	DC.L	VdcLogBuf,VDCLOGMAX*16
+	ENDC
+	DC.L	0
+	IFNE	VdcLog
+VDCLOGMAX=32768
+VdcLogN:	DC.L	0
+VdcLogLast:	DC.W	-1
+; D0 = 1: high port, D1 = register. 16 bytes a write: frame, line, reg, MPR2, value, PC, MPR3, MPR4, ($EE), S
+VdcLogW:
+	TST.W	D0
+	BEQ	.q
+	CMP.W	#2,D1
+	BEQ	.q
+	CMP.W	#6,D1
+	BCS.S	.go
+	CMP.W	#8,D1
+	BLS.S	.q
+.go:	MOVEM.L	D0/A0,-(SP)
+	MOVE.L	VdcLogN,D0
+	CMP.L	#VDCLOGMAX,D0
+	BCC	.x
+	LSL.L	#4,D0
+	LEA	(VdcLogBuf,D0.L),A0
+	TST.W	D1			; (HuZERO hammers R0 with zeros)
+	BNE.S	.nz
+	MOVE.W	VDP_Regs,D0
+	CMP.W	VdcLogLast,D0
+	BEQ	.x
+	MOVE.W	D0,VdcLogLast
+.nz:
+	ADDQ.L	#1,VdcLogN
+	MOVE.W	AutoFrames+2,(A0)+
+	MOVE.W	Regs+ScanLine,(A0)+
+	MOVE.B	D1,(A0)+
+	MOVE.B	Regs+TabMap+2,(A0)+
+	MOVE.W	(VDP_Regs.L,D1.W*2),(A0)+
+	MOVE.L	A5,D0
+	SUB.W	(A2),D0
+	MOVE.W	D0,(A0)+
+	MOVE.B	Regs+TabMap+3,(A0)+
+	MOVE.B	Regs+TabMap+4,(A0)+
+	MOVE.B	IRAM+$EE,(A0)+
+	MOVE.B	IRAM+$EF,(A0)+
+	MOVE.W	D6,(A0)+
+.x:	MOVEM.L	(SP)+,D0/A0
+.q:	RTS
+	ENDC
 StateDumpWrite:
 	MOVEM.L	D0-D7/A0-A6,-(SP)
 	MOVE.L	$4.W,A6
@@ -2179,6 +2295,15 @@ RunCopperScrolls:
 	tst.l	A6
 	beq	gemmy
 ;	beq	.end
+	IFEQ	NO_BGLINE|NO_BGMASK
+	move.l	BgLogNext,a4		; this frame's colour 0 entries
+	addq.l	#4,a4
+	cmp.w	#$7FFF,(a4)
+	beq.s	.noCol0
+	move.w	#$0180,(a5)+		; the colour the frame started with
+	move.w	-2(a4),(a5)+
+.noCol0:
+	ENDC
 .loopA:
 	tst.w	(a6)
 	bmi	.end
@@ -2210,7 +2335,11 @@ RunCopperScrolls:
 .skip7:
 
 
+	IFEQ	NO_BGLINE|NO_BGMASK
+	bsr	SetScrollCol
+	ELSE
 	bsr	SetScrollAtRender
+	ENDC
 
 
 	move.w	6(a6),d5	; next ScanLine with Scroll Y changes
@@ -2264,7 +2393,11 @@ RunCopperScrolls:
 ;	move.l	#$01800fff,(a5)+
 ;	move.l	#$01800020,(a5)+
 
+	IFEQ	NO_BGLINE|NO_BGMASK
+	bsr	SetScrollCol
+	ELSE
 	bsr	SetScrollAtRender
+	ENDC
 
 .noRepeat:
 
@@ -2273,6 +2406,19 @@ RunCopperScrolls:
 	bra	.loopA
 .end:
 
+	IFEQ	NO_BGLINE|NO_BGMASK
+	move.w	#$7FFF,d7		; the colour entries left
+	bsr	CopColFlush
+	moveq	#$0010,d1		; a raster effect on colour 0: black borders, not stripes
+	move.w	#$1040,d0
+	suba.l	BgLogNext,a4
+	cmp.w	#4+(BGBORDER*4),a4
+	bcs.s	.bord
+	moveq	#$0011,d1		; ECSENA, which BRDRBLNK needs
+	move.w	#$1060,d0		; BRDRBLNK
+.bord:	move.w	d0,BpCon3+2
+	move.w	d1,CopTopWait+6
+	ENDC
 	move.l	#$FFFFFFFE,(a5)+
 	move.l	#$FFFFFFFE,(a5)+
 
@@ -2419,6 +2565,58 @@ xLogBuffer:	ds.b	23
 xLogBufferEnd:	ds.b	20
 
 
+
+	IFEQ	NO_BGLINE|NO_BGMASK
+	cnop	0,8
+; -------------------------------------
+; SetScrollAtRender with the colour 0 moves merged in. Same registers, and
+;	A4: next BgLog entry
+;	D5: used
+; A move on a scroll entry's line comes last: it lands in the left border of
+; the next line, as the bitplane pointers are done and before the window opens.
+; -------------------------------------
+SetScrollCol:
+	move.w	d7,d5
+	bsr	CopColFlush
+	bsr	SetScrollAtRender
+	cmp.w	(a4),d5
+	bne.s	.x
+	move.w	#$0180,(a5)+
+	move.w	2(a4),(a5)+
+	addq.l	#4,a4
+.x:	rts
+
+; -------------------------------------
+; A WAIT + MOVE per colour entry above line D7, right of the window, so the
+; colour changes in the left border of the next line.
+;	D2: used
+;	D6, A4, A5: as SetScrollAtRender
+; -------------------------------------
+CopColFlush:
+.l:	move.w	(a4),d2
+	cmp.w	d7,d2
+	bcc.s	.x
+	IFEQ	NO_NTSCTOP
+	add.w	PicTop,d2
+	ELSE
+	add.w	#$2F,d2
+	ENDC
+	cmp.w	#$ff,d2
+	bcs.s	.w
+	tst.l	d6
+	bne.s	.w
+	moveq	#-1,d6
+	cmp.w	#$ff,d2
+	beq.s	.w
+	move.l	#$FFDFFFFE,(a5)+
+.w:	move.l	#$FFE1FFFE,(a5)+
+	move.b	d2,-4(a5)
+	move.w	#$0180,(a5)+
+	move.w	2(a4),(a5)+
+	addq.l	#4,a4
+	bra.s	.l
+.x:	rts
+	ENDC
 
 	cnop	0,8
 ; -------------------------------------
@@ -3552,7 +3750,7 @@ Copper:
 	DC.W	$010A,GfxBufNextLine-32-4
 
 ScrBits:DC.W	$0102,$8800
-	DC.W	$0104,$007F
+CopBplcon2:	DC.W	$0104,$007F	; sprites over or behind the BG (PonePaleta_AGA)
 BpCon3:	DC.W	$0106,$1040
 CopBplcon4:	DC.W	$010C,$00FF	; sprite colour bank (PonePaleta_AGA)
 
@@ -3730,6 +3928,12 @@ PSGDdaHoldBuf:	DS.B	6*264		; per channel: its last DDA level, played when the qu
 
 ;	------------------------
 	SECTION	Tablas,BSS
+	IFEQ	NO_POPRAM
+PopRAM:	DS.B	32*1024
+	ENDC
+	IFNE	VdcLog
+VdcLogBuf:	DS.B	VDCLOGMAX*16
+	ENDC
 	IFNE	ScrDump
 ScrDumpBuf:	DS.B	1000*128
 	ENDC

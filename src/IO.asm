@@ -91,12 +91,30 @@ IO_SetCardtridge:
 ; Colocamos punteros al Cartucho ROM en MemoryMapper
 	MOVE.L	MapROMBase(A3),A0
 	LEA	DirMappers,A1
+	IFEQ	NO_ROMMAP
+	MOVE.W	D0,D2
+	ENDC
+	IFEQ	NO_SF2
+	CMP.W	#128,D0			; banks $00-$7F: DirMappers has no room for more
+	BLS.S	.pg
+	MOVE.W	#128,D0
+.pg:
+	ENDC
 	SUBQ.W	#1,D0
 CreaMapBuc:
 	MOVE.L	A0,(A1)
 	ADD.W	#$2000,A0
 	ADDQ.W	#8,A1
 	DBF	D0,CreaMapBuc
+	IFEQ	NO_ROMMAP
+	BSR	RomMirror
+	ENDC
+	IFEQ	NO_SF2
+	BSR	Sf2Setup
+	ENDC
+	IFEQ	NO_POPRAM
+	BSR	PopSetup
+	ENDC
 
 ; -=-=-=-=-=-=-=-=-=-=-=> Cargamos MemoryPages segun la paginacion actual
 	MOVEQ	#8-1,D1
@@ -110,6 +128,151 @@ MemPagBuc2:
 	RTS
 
 ; -------------------------------------------------------------------
+
+	IFEQ	NO_POPRAM
+; Populous has 32 KB of RAM on the card at banks $40-$43; read and write both
+; go there. No header for it: the title in the ROM at $1F26, as Mednafen does.
+PopSetup:
+	MOVE.L	MapROMBase(A3),A0
+	CMP.L	#'POPU',$1F26(A0)
+	BNE.S	.x
+	CMP.L	#'LOUS',$1F2A(A0)
+	BNE.S	.x
+	LEA	PopRAM,A0
+	LEA	DirMappers+($40*8),A1
+	MOVEQ	#4-1,D0
+.bk:	MOVE.L	A0,(A1)+
+	MOVE.L	A0,(A1)+
+	MOVE.W	#$800-1,D1
+.cl:	CLR.L	(A0)+
+	DBF	D1,.cl
+	DBF	D0,.bk
+.x:	RTS
+	ENDC
+
+;	D2.W : pages in the card. Banks $00-$7F as on a HuCard: past the end they
+; mirror the card, and a 384 KB card (48 pages: 8 of the 30 originals) answers
+; with its first 256 KB at $00-$3F and its last 128 KB at $40-$7F (Mesen:
+; Parasol Stars uses banks $40-$4F for ROM offsets $40000-$5FFFF). A 512 KB card
+; answers with its last 256 KB at $40-$7F (Mesen, probe card).
+	IFEQ	NO_ROMMAP
+RomMirror:
+	TST.W	D2
+	BEQ.S	.x
+	CMP.W	#128,D2
+	BCC.S	.x
+	LEA	DirMappers,A1
+	MOVEQ	#0,D1
+.l:	MOVEQ	#0,D3
+	MOVE.W	D1,D3
+	CMP.W	#48,D2
+	BNE.S	.m
+	CMP.W	#$40,D3
+	BCC.S	.hi
+	AND.W	#$1F,D3
+	BRA.S	.s
+.hi:	AND.W	#$0F,D3
+	ADD.W	#$20,D3
+	BRA.S	.s
+.m:	CMP.W	#64,D2
+	BNE.S	.d
+	CMP.W	#$40,D3
+	BCS.S	.s
+	AND.W	#$1F,D3
+	ADD.W	#$20,D3
+	BRA.S	.s
+.d:	DIVU.W	D2,D3
+	CLR.W	D3
+	SWAP	D3
+.s:	MOVEQ	#13,D4
+	LSL.L	D4,D3
+	ADD.L	MapROMBase(A3),D3
+	MOVE.L	D3,(A1,D1.W*8)
+	ADDQ.W	#1,D1
+	CMP.W	#128,D1
+	BNE.S	.l
+.x:	RTS
+	ENDC
+
+; Street Fighter II' (2.5 MB, 320 pages, the one card of that size): banks $00-$3F are
+; the first 512 KB; $40-$7F the 512 KB picked by writing to $1FF0-$1FF3 of bank $00
+; (Mesen: only STZ abs and STZ abs,X, to $FFF0-$FFF3 with MPR7 = 0; the same addresses
+; in RAM are RAM: the game tests them at reset). Ordinary writes have no test, so
+; for this card alone the two STZ opcodes go through Sf2STZab / Sf2STZax; the table
+; entries are put back for any other card.
+	IFEQ	NO_SF2
+Sf2Setup:
+	CLR.W	Sf2Sel
+	MOVE.L	#STZab,Instr+($9C*4)
+	MOVE.L	#STZax,Instr+($9E*4)
+	CMP.W	#320,D2
+	BNE.S	.x
+	MOVE.L	#Sf2STZab,Instr+($9C*4)
+	MOVE.L	#Sf2STZax,Instr+($9E*4)
+.x:	RTS
+
+	CNOP	0,4
+Sf2STZab:
+	MOVE.W	(A5),D1
+	ROR.W	#8,D1
+	BSR.S	Sf2Hit
+	JMP	STZab
+	CNOP	0,4
+Sf2STZax:
+	MOVE.W	(A5),D1
+	ROR.W	#8,D1
+	ADD.W	D4,D1
+	BSR.S	Sf2Hit
+	JMP	STZax
+
+Sf2Hit:	MOVE.W	D1,D0			; D1 = logical address; D0, D1 are free here
+	AND.W	#$1FFC,D0
+	CMP.W	#$1FF0,D0
+	BNE.S	.x
+	MOVE.W	D1,D0
+	ROL.W	#3,D0
+	AND.W	#7,D0
+	TST.B	TabMap(A3,D0.W)		; bank $00 only
+	BNE.S	.x
+	AND.W	#3,D1
+	CMP.W	Sf2Sel,D1
+	BEQ.S	.x
+	MOVE.W	D1,Sf2Sel
+	MOVEM.L	D3/D7/A0-A1,-(SP)
+	SUB.W	(A2),A5			; the PC as a logical address, as TAM
+	MOVEQ	#0,D0
+	MOVE.W	D1,D0
+	ADDQ.W	#1,D0
+	MOVEQ	#19,D3
+	LSL.L	D3,D0			; $80000 x (selected + 1)
+	ADD.L	MapROMBase(A3),D0
+	MOVE.L	D0,A0
+	LEA	DirMappers+($40*8),A1
+	MOVE.W	#64-1,D3
+.m:	MOVE.L	A0,(A1)
+	ADD.W	#$2000,A0
+	ADDQ.W	#8,A1
+	DBF	D3,.m
+	MOVEQ	#8-1,D3
+.p:	MOVEQ	#0,D7
+	MOVE.B	TabMap(A3,D3.W),D7
+	BMI.S	.n
+	CMP.B	#$40,D7
+	BCS.S	.n
+	MOVE.W	D3,D1
+	BSR	SetMapper
+.n:	DBF	D3,.p
+	MOVEQ	#0,D1
+	MOVE.W	A5,D1
+	MOVE.L	D1,A5
+	LSR.W	#8,D1
+	LSR.B	#5,D1
+	ADD.L	PagRead(A3,D1.W*4),A5
+	LEA	Restas(A3,D1.W*8),A2
+	MOVEM.L	(SP)+,D3/D7/A0-A1
+.x:	RTS
+Sf2Sel:	DC.W	0
+	ENDC
 
 ;	D1.w : Page number (0-7)
 ;	D7.w : Mapper to be used
@@ -230,7 +393,11 @@ readIO_0000_03FF:
 	BTST	#1,D0
 	BNE.S	read_0002_3
 
+	IFEQ	NO_IOREAD
+	CLR.B	(A4)			; $0001
+	ELSE
 	MOVE.B	#$FF,(A4)
+	ENDC
 	RTS
 
 read_0000:
@@ -243,6 +410,30 @@ read_0000:
 read_0002_3:
 ;	ADD.B	#$35,(A4)
 ;	BCLR	#5,(A4)
+	IFEQ	NO_VDCREAD
+; The VDC reads ahead (test ROM against Mesen): a write to MARR's high byte, or a read
+; of $0003, loads the buffer from MARR and then steps MARR. A read gives the buffer, always.
+	BTST	#0,D0
+	BNE.S	.vrHi
+	MOVE.B	VdcBuf+1,(A4)
+	RTS
+.vrHi:	MOVE.B	VdcBuf,(A4)
+	MOVE.B	VDP_Index(A3),D1
+	AND.B	#$1F,D1
+	CMP.B	#2,D1
+	BNE.S	VdcRet
+VdcFetch:
+	MOVE.W	VDP_Regs+(1*2),D1
+	AND.L	#$7FFF,D1
+	MOVE.W	(VRAM,D1.L*2),VdcBuf
+	MOVE.B	(VDP_Regs+(5*2)),D0
+	LSR.B	#3,D0
+	AND.W	#$0003,D0
+	ADD.W	(VDP_Sumas.W,PC,D0.W*2),D1
+	MOVE.W	D1,VDP_Regs+(1*2)
+VdcRet:	RTS
+VdcBuf:	DC.W	0
+	ENDC
 
 	MOVEQ	#0,D1
 	MOVE.B	VDP_Index(A3),D1
@@ -301,6 +492,9 @@ readIO_0405:
 	MOVE.W	PAL_Index(A3),D1
 	AND.W	#$01FF,D1
 	MOVE.B	(VDP_Pal+0.L,D1.W*2),(A4)
+	IFEQ	NO_IOREAD
+	OR.B	#$FE,(A4)		; the seven unused bits read 1
+	ENDC
 	ADDQ.W	#1,D1
 	MOVE.W	D1,PAL_Index(A3)
 	RTS
@@ -327,6 +521,9 @@ readIO_1000_13FF:
 KeyLow:
 	NOT.B	D1
 	AND.B	#$0F,D1
+	IFEQ	NO_IOREAD
+	OR.B	#$30,D1			; bits 4 and 5 read 1
+	ENDC
 	MOVE.B	D1,(A4)
 	RTS
 
@@ -429,6 +626,9 @@ writeIO_0000_03FF:
 
 	MOVE.B	VDP_Index(A3),D1
 	AND.W	#$001F,D1
+	IFNE	VdcLog
+	JSR	VdcLogW
+	ENDC
 	IFEQ	NO_RTG
 	CMP.W	#$0005,D1
 	BNE.S	.noCR
@@ -437,10 +637,32 @@ writeIO_0000_03FF:
 	ENDC
 	CMP.W	#$0002,D1
 	BEQ.S	writeVDP_02
+	IFEQ	NO_VDCREAD
+	CMP.W	#$0001,D1
+	BNE.S	.noR1
+	TST.W	D0
+	BNE	VdcFetch		; MARR high byte: the buffer loads
+	RTS
+.noR1:
+	ENDC
 	CMP.W	#$0007,D1
+	IFEQ	NO_VDCDMA&NO_VDCREAD
+	BEQ	writeVDP_07
+	ELSE
 	BEQ.S	writeVDP_07
+	ENDC
 	CMP.W	#$0008,D1
+	IFEQ	NO_VDCDMA&NO_VDCREAD
+	BEQ	writeVDP_08
+	ELSE
 	BEQ.S	writeVDP_08
+	ENDC
+	IFEQ	NO_VDCDMA
+	CMP.W	#$0012,D1
+	BEQ	writeVDP_12
+	CMP.W	#$0013,D1
+	BEQ	writeVDP_13
+	ENDC
 	RTS
 
 writeIO_0000:
@@ -451,7 +673,15 @@ writeIO_0000:
 
 writeVDP_02:
 	TST.W	D0
+	IFEQ	NO_VDCREAD
+	BEQ	WriteIO_RET
+	ELSE
 	BEQ.S	WriteIO_RET
+	ENDC
+	IFEQ	NO_VRAMEND
+	TST.B	VDP_Regs		; MAWR $8000+: no VRAM, the write is lost, MAWR steps
+	BMI.S	writeVDP_02x
+	ENDC
 
 	MOVE.W	VDP_Regs,D1
 	AND.W	#$7FFF,D1
@@ -472,6 +702,16 @@ writeVDP_02:
 
 	MOVE.W	D1,VDP_Regs
 	RTS
+	IFEQ	NO_VRAMEND
+writeVDP_02x:
+	MOVE.B	(VDP_Regs+(5*2)),D0
+	LSR.B	#3,D0
+	AND.W	#$0003,D0
+	MOVE.W	VDP_Regs,D1
+	ADD.W	(VDP_Sumas.W,PC,D0.W*2),D1
+	MOVE.W	D1,VDP_Regs
+	RTS
+	ENDC
 
 
 writeVDP_07:
@@ -509,7 +749,19 @@ logScrollXY:
 	cmp.l	ScrollChangesNow(A3),a0	; line 0: first entry of the frame?
 	beq.s	.full
 	bra.s	.upd			; no: entries on line 0 replace each other
-.sl1:	cmp.w	#(224),d0
+.sl1:
+	IFEQ	NO_RCRLATE
+; Our line starts where the VDC raises the raster IRQ, about 56 cycles before its line
+; ends (Mesen: IRQ at hclock 1190-1200 of 1365). A write that soon still takes effect
+; on this line (Dungeon Explorer's status panel: R8 at hclock 1353).
+	cmp.l	#(455-56)<<16,d2	; (upper word of D2: cycles left in the line)
+	bcs.s	.sl2
+	tst.b	CpuSlow
+	bne.s	.sl2
+	subq.w	#1,d0
+.sl2:
+	ENDC
+	cmp.w	#(224),d0
 	IFEQ	NO_RTG|NO_RTGFIX
 	bcc.s	.late
 .inPic:
@@ -632,6 +884,12 @@ writeIO_0405:
 	BEQ.S	.npl
 	JSR	RtgPalLog
 .npl:
+	ENDC
+	IFEQ	NO_BGLINE|NO_BGMASK
+	TST.W	D1			; AGA: colour 0 follows the raster
+	BNE.S	.nbl
+	JSR	BgColLog
+.nbl:
 	ENDC
 	MOVE.W	PAL_Data(A3),(VDP_Pal.L,D1.W*2)
 	ADDQ.W	#1,D1
@@ -853,6 +1111,100 @@ VDP_Pal:	DS.W	512
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+
+	IFEQ	NO_VDCDMA
+writeVDP_13:				; SATB: one SAT copy at the next vblank
+	TST.W	D0
+	BEQ	WriteIO_RET
+	ST	SatbPend
+	RTS
+
+writeVDP_12:				; LENR high byte starts the VRAM-VRAM DMA,
+	TST.W	D0			; which runs in the vblank
+	BEQ	WriteIO_RET
+	MOVE.W	ScanLine(A3),D0
+	CMP.W	VblLine,D0
+	BCC.S	VdmaRun
+	ST	VdmaPend
+	RTS
+
+; All at once: the words of the copy cost the CPU no time here. Afterwards SOUR and
+; DESR have run on and LENR = $FFFF, as on the VDC; DCR bit 2/3: count down.
+VdmaRun:
+	MOVEM.L	D0-D4/A0,-(SP)
+	CLR.B	VdmaPend
+	LEA	VRAM,A0
+	MOVE.W	VDP_Regs+($10*2),D0
+	MOVE.W	VDP_Regs+($11*2),D1
+	MOVE.W	VDP_Regs+($12*2),D2
+	MOVEQ	#1,D3
+	BTST	#2,VDP_Regs+1+($0F*2)
+	BEQ.S	.s
+	MOVEQ	#-1,D3
+.s:	MOVEQ	#1,D4
+	BTST	#3,VDP_Regs+1+($0F*2)
+	BEQ.S	.lp
+	MOVEQ	#-1,D4
+.lp:	TST.W	D1			; DESR $8000+: no VRAM there
+	BMI.S	.nx
+	AND.W	#$7FFF,D0
+	MOVE.W	(A0,D0.W*2),(A0,D1.W*2)
+	MOVE.W	D1,-(SP)
+	LSR.W	#4,D1
+	ST	(TabRedef,D1.W)
+	MOVE.W	(SP)+,D1
+.nx:	ADD.W	D3,D0
+	ADD.W	D4,D1
+	DBF	D2,.lp
+	MOVE.W	D0,VDP_Regs+($10*2)
+	MOVE.W	D1,VDP_Regs+($11*2)
+	MOVE.W	#$FFFF,VDP_Regs+($12*2)
+	BTST	#1,VDP_Regs+1+($0F*2)
+	BEQ.S	.q
+	OR.B	#$10,Status(A3)
+	OR.B	#IRQ1_INT,IRQ_Pending(A3)
+.q:	MOVEM.L	(SP)+,D0-D4/A0
+	RTS
+
+; The line loop, on the vblank line, IRQ or no IRQ: the vblank IRQ if it is on,
+; the SAT copy if R13 was written or DCR bit 4 repeats it (its end IRQ comes
+; 3 lines later, Mesen: Legendary Axe, line 249 -> 252), the waiting VRAM DMA.
+VdcVblank:
+	MOVEM.L	D0/D1/A0/A1,-(SP)
+	BTST	#3,VDP_Regs+1+(5*2)
+	BEQ.S	.nvi
+	OR.B	#STATUS_VBLANK_INT,Status(A3)
+	OR.B	#IRQ1_INT,IRQ_Pending(A3)
+.nvi:	TST.B	SatbPend
+	BNE.S	.sat
+	BTST	#4,VDP_Regs+1+($0F*2)
+	BEQ.S	.nsat
+.sat:	CLR.B	SatbPend
+	LEA	VRAM,A0			; from word SATB on, wrapping at the end of VRAM
+	MOVE.W	VDP_Regs+($13*2),D1
+	LEA	SpriteCoor,A1
+	MOVE.W	#(256)-1,D0
+.sl:	AND.W	#$7FFF,D1
+	MOVE.W	(A0,D1.W*2),(A1)+
+	ADDQ.W	#1,D1
+	DBF	D0,.sl
+	MOVE.B	#4,SatbWait		; (this line counts)
+.nsat:	TST.B	VdmaPend
+	BEQ.S	.x
+	BSR	VdmaRun
+.x:	MOVEM.L	(SP)+,D0/D1/A0/A1
+	RTS
+
+	IFEQ	NO_VDLATE
+RrLine:	DC.W	-1
+VdLate:	DC.W	-1
+	ENDC
+VblLine:	DC.W	251
+SatbPend:	DC.B	0
+VdmaPend:	DC.B	0
+SatbWait:	DC.B	0
+	CNOP	0,2
+	ENDC
 
 ; -------------------------------------------------------------------
 

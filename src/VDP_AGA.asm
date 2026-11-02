@@ -965,6 +965,15 @@ PrintGFX:
 	AND.W	#$0007,D3
 	MOVE.W	(VBGHeight.W,PC,D3.W*2),D2
 	MOVE.W	(VBGWidth.W,PC,D3.W*2),D3
+	IFEQ	NO_BATSIZE
+	CMP.W	BatDimW,D3		; BAT size changed: draw every cell (TabDirRef is
+	BNE.S	.batNew			; filled in scan order, so its entries now belong
+	CMP.W	BatDimH,D2		; to other cells, and the copies at +width are stale)
+	BEQ.S	.batOld
+.batNew:
+	BSR	BatForce
+.batOld:
+	ENDC
 
 	IFEQ	NO_SPRBANK
 	CMP.W	BgPalDimW,D3		; BAT size changed: count the palettes again
@@ -1048,6 +1057,22 @@ PrintGFX:
 
 	MOVE.W	#8-1,D0
 .PrtGfxBuc:
+	IFEQ	NO_BGMASK
+; A pixel of value 0 is index 0 in every palette: the palette planes (D4) only
+; where this row has a pixel.
+	MOVE.W	(A2),D4
+	OR.W	16(A2),D4
+	MOVE.B	D4,D5
+	LSR.W	#8,D4
+	OR.B	D4,D5
+	MOVE.B	D5,D4
+	LSL.W	#8,D4
+	MOVE.B	D5,D4
+	MOVE.W	D4,D5
+	SWAP	D4
+	MOVE.W	D5,D4
+	AND.L	D7,D4
+	ENDC
 	MOVE.L	A0,A1
 
 	move.l	a0,a4
@@ -1070,6 +1095,27 @@ PrintGFX:
 
 	addq	#2,A2
 
+	IFEQ	NO_BGMASK
+	add.l	a3,a4
+	ADD.L	A3,A1
+	move.b	d4,(a4)
+	MOVE.B	D4,(A1)
+	ROR.L	#8,D4
+	add.l	a3,a4
+	ADD.L	A3,A1
+	move.b	d4,(a4)
+	MOVE.B	D4,(A1)
+	ROR.L	#8,D4
+	add.l	a3,a4
+	ADD.L	A3,A1
+	move.b	d4,(a4)
+	MOVE.B	D4,(A1)
+	ROR.L	#8,D4
+	add.l	a3,a4
+	ADD.L	A3,A1
+	move.b	d4,(a4)
+	MOVE.B	D4,(A1)
+	ELSE
 	add.l	a3,a4
 	ADD.L	A3,A1
 	move.b	d7,(a4)
@@ -1090,6 +1136,7 @@ PrintGFX:
 	move.b	d7,(a4)
 	MOVE.B	D7,(A1)
 	ROR.L	#8,D7
+	ENDC
 
 	ADD.L	#(GfxBufNextLine),A0
 
@@ -1138,6 +1185,25 @@ PrintGFX:
 
 
 
+
+	IFEQ	NO_BATSIZE
+BatDimW:	DC.W	0
+BatDimH:	DC.W	0
+BatForceB:	DC.B	1
+	EVEN
+; D3, D2 = BAT width, height in tiles. Keeps all registers.
+BatForce:
+	MOVE.W	D3,BatDimW
+	MOVE.W	D2,BatDimH
+	MOVEM.L	D0-D1/A0,-(SP)
+	LEA	TabDirRef,A0
+	MOVE.L	#BatForceB,D1
+	MOVE.W	#(128*64)-1,D0
+.f:	MOVE.L	D1,(A0)+
+	DBF	D0,.f
+	MOVEM.L	(SP)+,D0-D1/A0
+	RTS
+	ENDC
 
 	IFEQ	NO_SPRBANK
 ; BgPalCnt: BAT entries per BG palette over the BAT area PrintGFX scans
@@ -1436,6 +1502,9 @@ PonPalBuc:
 
 	lea	SpriteCoor,A4
 
+	IFEQ	NO_SPRBACK|NO_BGMASK
+	moveq	#0,D7		; bit 0: a sprite in the window, bit 1: one over the BG
+	ENDC
 	move.w	#64-1,D0	; 64 Sprites
 PonPalBuc1:
 	move.w	(A4),D1		; Coor Y del Sprite
@@ -1461,6 +1530,13 @@ PonPalBuc1:
 	ENDC
 	bcc.s	skipSpr
 
+	IFEQ	NO_SPRBACK|NO_BGMASK
+	bset	#0,D7
+	tst.b	7(A4)		; SPBG: 1 = over the BG
+	bpl.s	.back
+	bset	#1,D7
+.back:
+	ENDC
 	move.w	6(A4),D1	; Palete Index
 ;	ror.w	#8,D1
 	IFEQ	NO_SPRAREA
@@ -1490,6 +1566,16 @@ PonPalBuc1:
 skipSpr:
 	addq.l	#8,A4
 	dbf	d0,PonPalBuc1
+
+	IFEQ	NO_SPRBACK|NO_BGMASK
+; Hardware sprites have one priority for the frame, so behind the BG only when
+; every visible sprite asks for it (title screens); a mixed frame stays over it.
+	move.w	#$007F,D1
+	cmp.b	#1,D7
+	bne.s	.prio
+	move.w	#$0040,D1	; PF2P 0: the BG over all sprites
+.prio:	move.w	D1,CopBplcon2+2
+	ENDC
 
 	move.w	#16-1,D0	; 16 Paletas
 	moveq.l	#0,D1
@@ -1539,6 +1625,9 @@ noEsMayor:
 	ELSE
 	SUB.W	#4+(16*4),A1
 	ENDC
+	IFEQ	NO_BGMASK
+	MOVE.W	COLOR+2,D6	; sprites in bank 0 must not take colour 0
+	ENDC
 	LEA	VDP_Pal+$200,A0
 	ADD.L	D3,A0
 	MOVE.W	#(16)-1,D0
@@ -1564,6 +1653,10 @@ PonPalBuc2:
 	ADDQ.W	#2,A1
 	DBF	D0,PonPalBuc2
 
+	IFEQ	NO_BGMASK
+	MOVE.W	D6,COLOR+2
+	ENDC
+	IFNE	NO_BGMASK
 	IFEQ	NO_BGCOL0
 ; The VCE shows BG pixel value 0 in colour 0 for every BG palette. Copy the
 ; converted colour 0 to entries 16, 32, ... 240 (240 is also sprite colour 0,
@@ -1578,8 +1671,92 @@ PonPalBuc4:
 	LEA	(32*4)+4(A1),A1
 	DBF	D0,PonPalBuc4
 	ENDC
+	ENDC
 
 	RTS
+
+	IFEQ	NO_BGLINE|NO_BGMASK
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; Colour 0 line by line. All BG palettes share index 0 (NO_BGMASK), so one
+; COLOR00 move follows a raster effect on the backdrop. Each frame has a table:
+; a head entry (row -1, the colour at the start of the frame), then (row,
+; colour) entries, rows rising, row $7FFF at the end. A write on ScanLine N
+; shows from row N+1, as a scroll write does. Colours are copper values.
+BGLOGMAX = 224
+BGBORDER = 16		; entries in a frame that make it a raster effect (fades write a few)
+
+BgLogNow:	DC.L	BgLogA	; being written
+BgLogNext:	DC.L	BgLogB	; last finished frame
+BgLogIdx:	DC.L	BgLogA+4
+BgLogA:		DS.L	1+BGLOGMAX+1
+BgLogB:		DS.L	1+BGLOGMAX+1
+
+BgLogInit:
+	MOVE.L	#BgLogA,BgLogNow
+	MOVE.L	#BgLogB,BgLogNext
+	MOVE.L	#BgLogA+4,BgLogIdx
+	MOVE.L	#$FFFF0000,BgLogA
+	MOVE.L	#$FFFF0000,BgLogB
+	MOVE.W	#$7FFF,BgLogA+4
+	MOVE.W	#$7FFF,BgLogB+4
+	RTS
+
+; D0.W = VCE colour -> copper value (as PonePaleta_AGA); D1-D2 used
+BgColRgb:
+	MOVE.W	D0,D1
+	MOVE.W	D0,D2
+	LSR.W	#1,D2		; G
+	AND.W	#$00E0,D2
+	LSL.W	#6,D1		; R
+	AND.W	#$0E00,D1
+	LSL.W	#1,D0		; B
+	AND.W	#$000E,D0
+	OR.W	D1,D0
+	OR.W	D2,D0
+	RTS
+
+; A write to VCE entry 0 (IO.asm), PAL_Data = the colour. All registers kept.
+BgColLog:
+	IFEQ	NO_RTG
+	TST.B	RtgOn		; RTG has its own log
+	BNE.S	.r
+	ENDC
+	MOVEM.L	D0-D2/A0,-(SP)
+	MOVE.W	ScanLine(A3),D1
+	CMP.W	#BGLOGMAX,D1
+	BCC.S	.x
+	ADDQ.W	#1,D1
+	MOVE.L	BgLogIdx,A0
+	CMP.W	-4(A0),D1	; same row: the last write counts
+	BEQ.S	.upd
+	MOVE.W	D1,(A0)
+	ADDQ.L	#4,A0
+	MOVE.L	A0,BgLogIdx
+.upd:	MOVE.W	PAL_Data(A3),D0
+	BSR	BgColRgb
+	MOVE.W	D0,-2(A0)
+.x:	MOVEM.L	(SP)+,D0-D2/A0
+.r:	RTS
+
+; End of a PCE frame: this table goes to the vblank, the other one starts with
+; entry 0 as the next frame begins. All registers kept.
+BgLogSwap:
+	MOVEM.L	D0-D2/A0-A1,-(SP)
+	MOVE.L	BgLogIdx,A0
+	MOVE.W	#$7FFF,(A0)
+	MOVE.L	BgLogNow,A0
+	MOVE.L	BgLogNext,A1
+	MOVE.L	A1,BgLogNow
+	MOVE.L	A0,BgLogNext
+	MOVE.W	#-1,(A1)
+	MOVE.W	VDP_Pal,D0
+	BSR	BgColRgb
+	MOVE.W	D0,2(A1)
+	ADDQ.L	#4,A1
+	MOVE.L	A1,BgLogIdx
+	MOVEM.L	(SP)+,D0-D2/A0-A1
+	RTS
+	ENDC
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

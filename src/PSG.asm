@@ -300,6 +300,9 @@ PSGUpdate:
 PSGAllocate:
 	MOVEQ	#0,D6
 .score:	BSR	PSGChScore
+	IFEQ	NO_PSGBASS
+	BSR	PSGBassUp
+	ENDC
 	MOVE.W	D1,(PSGScore.L,D6.W*2)
 	MOVE.B	D2,(PSGPan.L,D6.W)
 	ADDQ.W	#1,D6
@@ -366,6 +369,25 @@ PSGAllocate:
 	CMP.W	#6,D6
 	BNE.S	.place
 	RTS
+
+	IFEQ	NO_PSGBASS
+; A0 = channel registers, D6 = channel, D1.w = score: a tone at F >= $300 goes up 20.
+PSGBassUp:
+	TST.W	D1
+	BEQ.S	.x
+	BTST	#6,4(A0)		; not DDA
+	BNE.S	.x
+	CMP.W	#4,D6
+	BCS.S	.t
+	TST.B	7(A0)			; not noise
+	BMI.S	.x
+.t:	MOVE.B	3(A0),D0
+	AND.B	#$0F,D0
+	CMP.B	#3,D0
+	BCS.S	.x
+	ADD.W	#20,D1
+.x:	RTS
+	ENDC
 
 ; D6 = channel -> D1.w = score (Paula volume, 0 = nothing to play),
 ; D2.b = balance lean (-1 left, 0 centre, 1 right). A0 = channel registers.

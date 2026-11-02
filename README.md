@@ -40,8 +40,7 @@ the menu, keys and pads, and the limits.
 Tested by us on an A1200 with a PiStorm (RTG for speed, sound and the
 picture; AGA less so) and in WinUAE, including a 68030/50 setting. Not
 tested on a real 68030, 68040 or 68060 card. Not all games work. Not
-supported: CD-ROM games, SuperGrafx, Street Fighter II' Champion Edition's
-mapper, Populous's card RAM.
+supported: CD-ROM games, SuperGrafx.
 
 ## Building
 
@@ -61,7 +60,7 @@ mapper, Populous's card RAM.
   default. The switch block is at the top of `src/Main.asm`. `-DDbgRows=1`
   draws timing rows at the top of the screen
   (see `docs/package/Debug rows.txt` in the archive).
-- Release package: `python tools/make_release.py --build --version 1.0`
+- Release package: `python tools/make_release.py --build --version 1.1`
   builds the release binary and stages the drawer; the archive is made with
   the Amiga's own `lha`.
 
@@ -78,15 +77,15 @@ mapper, Populous's card RAM.
 ## Credit
 
 - **AmiPCEngine:** Juan Antonio Gomez Galvez (GUS Entertainment).
-- **Version 1.0:** z00p.
+- **Versions 1.0 and 1.1:** z00p.
 - **Web and menu graphics:** Multivac.
 - **Thanks:** Zener and Sandman.
 - Menu code made with Devpac III (HiSoft) and GadToolsBox (Jaba Development).
 
 ## Licence
 
-AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Version 1.0, by
-z00p, is a community update made and published with his permission. See [NOTICE.md](NOTICE.md).
+AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 and 1.1, by
+z00p, are community updates made and published with his permission. See [NOTICE.md](NOTICE.md).
 
 ## Trademarks
 

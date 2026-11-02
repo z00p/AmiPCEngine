@@ -1910,7 +1910,11 @@ RtgCopy:
 .ln:	TST.B	(A4)
 	BNE.S	.lnd
 	CMP.B	#4,RtgScanOn		; Blended: the line's dark row also shows the next line
+	IFEQ	NO_BLENDLV
+	BCS	.lnx
+	ELSE
 	BNE	.lnx
+	ENDC
 	TST.W	D7
 	BEQ	.lnx
 	TST.B	1(A4)
@@ -2023,12 +2027,16 @@ RtgCostL:	DC.L	0
 
 	IFEQ	ScanOff
 ; ---------------------------------------------------------------------------
-; Scanlines (prefs byte $15: 0 Off, 1/2/3 = Hard 25/50/75%, 4 Blended). At 2x or
+; Scanlines (prefs byte $15: 0 Off, 1/2/3 = Hard 25/50/75%, 4 Blended, 5 Blended
+; light, 6 Blended strong; 5 and 6 need NO_BLENDLV=0). At 2x or
 ; more, rows 1 (and 3) of each PCE line are drawn from the composed pixels through
 ; RtgScanTP (64K words, index = the 16-bit screen pixel as a signed word from the
-; table's middle): Hard: the pixel with each channel x (4-n)/4; Blended: a quarter
-; of each channel in the native (not byte-swapped) word, the dark row = quarter of
-; this line + quarter of the next, byte-swapped again for PC formats (ROL.W #8).
+; table's middle): Hard: the pixel with each channel x (4-n)/4; Blended: h(v) of
+; each channel in the native (not byte-swapped) word, the dark row = h(this line)
+; + h(next line), byte-swapped again for PC formats (ROL.W #8). h(v) = (m v + 4) / 8
+; with m = 3 light, 2 Blended, 1 strong, so the row is (a + b) / 2 x 0.75, 0.50 or
+; 0.25 per channel (AmiMSX and Arnold's rule); two h add with no carry out of a
+; channel (NO_BLENDLV=1: one level, h(v) = v / 4).
 ; Off: one byte test per copied row.
 
 ; RtgScanRow: A0 = composed line, A1 = screen row, D3 = width, D4 = scale,
@@ -2046,7 +2054,11 @@ RtgScanRow:
 	MOVEQ	#0,D7
 	MOVE.B	RtgScanRol,D7
 	CMP.B	#4,RtgScanOn
+	IFEQ	NO_BLENDLV
+	BCC.S	.bl
+	ELSE
 	BEQ.S	.bl
+	ENDC
 	CMP.W	#2,D4
 	BNE.S	.h3
 .h2:	MOVE.L	(A0)+,D0
@@ -2101,7 +2113,11 @@ RtgScanPrep:
 	MOVEM.L	D0-D7/A0-A2,-(SP)
 	MOVEQ	#0,D0
 	MOVE.B	DirPrefs+$15,D0
+	IFEQ	NO_BLENDLV
+	CMP.B	#6,D0
+	ELSE
 	CMP.B	#4,D0
+	ENDC
 	BLS.S	.lv
 	MOVEQ	#0,D0
 .lv:	MOVE.B	D0,RtgScanLv
@@ -2146,18 +2162,39 @@ RtgScanPrep:
 	LSR.L	D3,D0
 	AND.L	D4,D0			; channel
 	CMP.B	#4,D6
+	IFEQ	NO_BLENDLV
+	BCC.S	.q
+	ELSE
 	BEQ.S	.q
+	ENDC
 	MOVEQ	#4,D4
 	SUB.L	D6,D4
 	MULU.W	D4,D0
 	LSR.L	#2,D0			; x (4 - n) / 4
 	BRA.S	.c1
+	IFEQ	NO_BLENDLV
+.q:	MOVEQ	#2,D4			; Blended x 0.50: h = (m v + 4) / 8
+	CMP.B	#4,D6
+	BEQ.S	.q1
+	MOVEQ	#3,D4			; light x 0.75
+	CMP.B	#5,D6
+	BEQ.S	.q1
+	MOVEQ	#1,D4			; strong x 0.25
+.q1:	MULU.W	D4,D0
+	ADDQ.L	#4,D0
+	LSR.L	#3,D0
+	ELSE
 .q:	LSR.L	#2,D0			; Blended: a quarter
+	ENDC
 .c1:	LSL.L	D3,D0
 	OR.L	D0,D2
 	DBF	D5,.ch
 	CMP.B	#4,D6			; Hard: back to the screen's byte order
+	IFEQ	NO_BLENDLV
+	BCC.S	.st
+	ELSE
 	BEQ.S	.st
+	ENDC
 	TST.B	RtgScanRol
 	BEQ.S	.st
 	ROL.W	#8,D2
@@ -2167,11 +2204,16 @@ RtgScanPrep:
 	MOVE.W	D2,(A1,D0.L*2)
 	ADDQ.L	#1,D7
 	CMP.L	#65536,D7
+	IFEQ	NO_BLENDLV
+	BNE	.u
+	ELSE
 	BNE.S	.u
+	ENDC
 .x:	MOVEM.L	(SP)+,D0-D7/A0-A2
 	RTS
 
-; RtgScanVal: A0 = "OFF", "25", "50", "75" or "BLEND" (ToolType / CLI value) ->
+; RtgScanVal: A0 = "OFF", "25", "50", "75", "BLEND", "BLENDLIGHT" or "BLENDSTRONG"
+; (ToolType / CLI value; the first character decides, then the letter after BLEND) ->
 ; RtgScanTT and the prefs byte (embedded builds have no prefs file).
 RtgScanVal:
 	MOVEM.L	D0-D1,-(SP)
@@ -2193,10 +2235,36 @@ RtgScanVal:
 	CMP.B	#55,D0			; 7(5)
 	BEQ.S	.ok
 	MOVEQ	#4,D1
+	IFEQ	NO_BLENDLV
+	CMP.B	#66,D0			; B
+	BEQ.S	.bl
+	CMP.B	#98,D0			; b
+	BNE.S	.x
+.bl:	MOVEM.L	D2/A0-A1,-(SP)		; BLEND: light or strong by the letter after it
+	ADDQ.L	#1,A0
+	LEA	RtgScanLend(PC),A1
+.bc:	MOVE.B	(A1)+,D0
+	BEQ.S	.bh
+	MOVE.B	(A0)+,D2
+	OR.B	#32,D2
+	CMP.B	D0,D2
+	BEQ.S	.bc
+	BRA.S	.bx
+.bh:	MOVE.B	(A0),D0
+	OR.B	#32,D0
+	CMP.B	#108,D0			; l
+	BNE.S	.b1
+	MOVEQ	#5,D1
+.b1:	CMP.B	#115,D0			; s
+	BNE.S	.bx
+	MOVEQ	#6,D1
+.bx:	MOVEM.L	(SP)+,D2/A0-A1
+	ELSE
 	CMP.B	#66,D0			; B
 	BEQ.S	.ok
 	CMP.B	#98,D0			; b
 	BNE.S	.x
+	ENDC
 .ok:	MOVE.B	D1,RtgScanTT
 	MOVE.B	D1,DirPrefs+$15
 .x:	MOVEM.L	(SP)+,D0-D1
@@ -2241,6 +2309,14 @@ RtgScanMenu:
 	BRA.S	RtgScanFlags
 
 ; Options > RTG scanlines: the setting for the next Power ON / Continue.
+	IFEQ	NO_BLENDLV
+RtgScanSet5:
+	MOVEQ	#5,D0
+	BRA.S	RtgScanSet
+RtgScanSet6:
+	MOVEQ	#6,D0
+	BRA.S	RtgScanSet
+	ENDC
 RtgScanSet0:
 	MOVEQ	#0,D0
 	BRA.S	RtgScanSet
@@ -2260,6 +2336,27 @@ RtgScanSet:
 ; RtgScanFlags: CHECKED on the sub-item of the setting in the NewMenu table
 ; (menus made again later show it).
 RtgScanFlags:
+	IFEQ	NO_BLENDLV
+	MOVEM.L	D0-D2/A0-A1,-(SP)
+	MOVEQ	#0,D1
+	MOVE.B	DirPrefs+$15,D1
+	LEA	MainMenuNewMenuS0+10,A0
+	LEA	RtgScanPos(PC),A1
+	MOVEQ	#7-1,D0
+.l:	MOVE.W	#$0001,(A0)		; CHECKIT
+	MOVEQ	#0,D2
+	MOVE.B	(A1)+,D2
+	CMP.W	D2,D1
+	BNE.S	.n
+	MOVE.W	#$0101,(A0)		; CHECKIT | CHECKED
+.n:	LEA	20(A0),A0
+	DBF	D0,.l
+	MOVEM.L	(SP)+,D0-D2/A0-A1
+	RTS
+RtgScanPos:	DC.B	0,1,2,3,5,4,6,0		; menu order -> setting
+RtgScanLend:	DC.B	"lend",0
+	EVEN
+	ELSE
 	MOVEM.L	D0-D1/A0,-(SP)
 	MOVEQ	#0,D1
 	MOVE.B	DirPrefs+$15,D1
@@ -2275,6 +2372,7 @@ RtgScanFlags:
 	BNE.S	.l
 	MOVEM.L	(SP)+,D0-D1/A0
 	RTS
+	ENDC
 
 RtgScanTTNom:	DC.B	"SCANLINES",0
 RtgScanCliNom:	DC.B	"SCANLINES=",0

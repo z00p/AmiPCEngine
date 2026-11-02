@@ -1262,7 +1262,7 @@ DirPrefs:
 	DC.W	$00		; $12 - Emulation Speed
 	DC.B	$00		; $14 - No illogical moves
 	IFEQ	ScanOff
-	DC.B	SCANDEF		; $15 - RTG scanlines: 0 Off, 1/2/3 = 25/50/75%, 4 Blended
+	DC.B	SCANDEF		; $15 - RTG scanlines: 0 Off, 1/2/3 = 25/50/75%, 4 Blended, 5 Blended light, 6 Blended strong
 	ELSE
 	DC.B	$00		; $15 -
 	ENDC
@@ -2231,7 +2231,13 @@ SubMenuScan:
 	DC.L	RtgScanSet1		; Hard 25%
 	DC.L	RtgScanSet2		; Hard 50%
 	DC.L	RtgScanSet3		; Hard 75%
+	IFEQ	NO_BLENDLV
+	DC.L	RtgScanSet5		; Blended light
+	ENDC
 	DC.L	RtgScanSet4		; Blended
+	IFEQ	NO_BLENDLV
+	DC.L	RtgScanSet6		; Blended strong
+	ENDC
 	DC.L	ControlRET
 	ENDC
 
