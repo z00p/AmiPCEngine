@@ -164,6 +164,9 @@ DbgFrame:
 	MOVE.W	D2,(A1)+
 	MOVE.W	DbgWorst,(A1)+
 	MOVE.W	DbgOther,(A1)+
+	IFNE	AutoExit
+	BSR	DbgAutoSum
+	ENDC
 	MOVEQ	#DbgSumsN-1,D1
 .c:	CLR.W	(A0)+
 	DBF	D1,.c
@@ -259,3 +262,66 @@ DbgVbl0:	DC.W	0
 DbgPrevVb:	DC.L	0
 DbgWinVb:	DC.L	0
 DbgOut:		DS.W	13
+
+	IFNE	AutoExit
+; AutoExit + DbgRows: the windows' figures over the whole run, for AmiPCE.result (tools/a1200run.py).
+DbgAutoSum:
+	MOVEM.L	D0-D1/A0-A1,-(SP)
+	LEA	DbgOut,A0
+	LEA	DbgAuto,A1
+	MOVEQ	#13-1,D1
+.a:	MOVEQ	#0,D0
+	MOVE.W	(A0)+,D0
+	ADD.L	D0,(A1)+
+	DBF	D1,.a
+	MOVE.W	DbgOut+22,D0		; longest frame of the run
+	CMP.L	(A1),D0
+	BLS.S	.nw
+	MOVE.L	D0,(A1)
+.nw:	ADDQ.L	#4,A1
+	MOVE.W	DbgOut+4,D0		; least spare time in one window
+	CMP.L	(A1),D0
+	BCC.S	.nm
+	MOVE.L	D0,(A1)
+.nm:	ADDQ.L	#4,A1
+	MOVE.W	DbgOut,D0		; fewest frames in one window
+	CMP.L	(A1),D0
+	BCC.S	.nf
+	MOVE.L	D0,(A1)
+.nf:	ADDQ.L	#1,4(A1)		; windows
+	MOVEM.L	(SP)+,D0-D1/A0-A1
+	RTS
+
+; DbgAutoFill: the text, from AutoWriteResult.
+DbgAutoFill:
+	LEA	DbgAuto,A1
+	LEA	DbgAutoTxt+6,A2
+	MOVEQ	#DbgAutoN-1,D3
+.f:	MOVE.L	(A1)+,D0
+	MOVE.L	A2,A0
+	JSR	AutoHex
+	LEA	15(A2),A2
+	DBF	D3,.f
+	IFEQ	NO_RTG
+	MOVEQ	#0,D0
+	MOVE.B	RtgScanLv,D0
+	MOVE.L	A2,A0
+	JSR	AutoHex
+	ENDC
+	RTS
+
+DbgAuto:	DS.L	13		; DbgOut's figures
+	DC.L	0		; wmax
+	DC.L	$FFFF		; wmin
+	DC.L	$FFFF		; fmin
+	DC.L	0		; wins
+DbgAutoN	= (*-DbgAuto)/4
+DbgAutoTxt:
+	DC.B	"frms=$00000000 vbls=$00000000 wait=$00000000 cpu_=$00000000 "
+	DC.B	"bg__=$00000000 spr_=$00000000 vbli=$00000000 late=$00000000 "
+	DC.B	"rtg_=$00000000 copy=$00000000 totl=$00000000 wrst=$00000000 "
+	DC.B	"othr=$00000000 wmax=$00000000 wmin=$00000000 fmin=$00000000 "
+	DC.B	"wins=$00000000 scan=$00000000",10
+DbgAutoTxtEnd:
+	CNOP	0,4
+	ENDC

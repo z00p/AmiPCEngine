@@ -257,6 +257,9 @@ tErNoNESCart:	DC.B	"      Invalid Cartridge!      ",0
 tErOutOfMem:	DC.B	"   -=>  Out of memory!  <=-   ",0
 tErChecksum:	DC.B	" CAUTION:  Checksum is wrong! ",0
 tErSavePrefs:	DC.B	"    Preferences not saved!    ",0
+	IFEQ	NO_BRAMSAVE
+tErSaveBram:	DC.B	"     Game save not written!   ",0
+	ENDC
 tErIDNoCorrecto:DC.B	"CAUTION: Bad GameBoy ID '00C3'",0
 tErPila:	DC.B	"   6502's Stack Gets Crazy!   ",0
 tErCodiLegal:	DC.B	"  Código ilegal $00 en $0000  ",0
@@ -477,6 +480,9 @@ Continue:
 	CNOP	0,8
 PowerON:
 	MOVEQ	#1,D7
+	IFEQ	NO_BRAMSAVE
+	BSR	BramLoad
+	ENDC
 ContinueCon:
 	LEA	tErNoCartucho(PC),A0
 	TST.L	BucCart(PC)
@@ -512,6 +518,9 @@ NoEsNTSC:MOVE.W	D1,$DFF1DC
 ; -=-=-
 	BSR	RefrescaReloj
 ; -=-=-
+	IFEQ	NO_BRAMSAVE
+	BSR	BramSave
+	ENDC
 
 	TST.B	DesborPILA			; *\*\*  POR QUITAR  */*/*
 	BEQ.S	NoDerPila
@@ -1213,6 +1222,131 @@ COPIPREFS:
 
 
 ; ------------------------------------------
+
+	IFEQ	NO_BRAMSAVE
+; Backup RAM, one 8 KB file per game: PROGDIR:Saves/<ROM name>.bup. Read before Power ON, written
+; when a game returns to the menu and has changed it (the OS is frozen during play). A game that
+; never changes it gets no file. Embedded test builds have no FileNom, so no saves.
+	CNOP	0,4
+BramLoad:
+	SF	BramGot
+	BSR	BramMkName
+	TST.B	BramName
+	BEQ.S	.ret
+	MOVE.L	#BramName,D1
+	MOVE.L	#1005,D2
+	BSR	OpenFile
+	BEQ.S	.ret
+	MOVE.L	#BramDisk,D2
+	MOVE.L	#8*1024,D3
+	BSR	ReadFile
+	SEQ	BramGot			; a short file counts as no save
+	BSR	CloseFile
+.ret:	RTS
+
+	CNOP	0,4
+BramSave:
+	TST.B	BramName
+	BEQ.S	.ret
+	LEA	SRAM,A0
+	LEA	BramDisk,A1
+	MOVE.W	#((8*1024)/4)-1,D0
+.cmp:	CMPM.L	(A0)+,(A1)+
+	DBNE	D0,.cmp
+	BEQ.S	.ret
+	MOVE.L	#BramDir,D1
+	MOVE.L	_DosBase,A6
+	JSR	-$78(A6)		; CreateDir (fails if it's there, that's fine)
+	MOVE.L	D0,D1
+	BEQ.S	.noDir
+	JSR	-$5A(A6)		; UnLock
+.noDir:	MOVE.L	#BramName,D1
+	MOVE.L	#1006,D2
+	BSR	OpenFile
+	BEQ.S	.err
+	MOVE.L	#SRAM,D2
+	MOVE.L	#8*1024,D3
+	BSR	WriteFile
+	BNE.S	.err
+	BSR	CloseFile
+	LEA	SRAM,A0
+	LEA	BramDisk,A1
+	MOVE.W	#((8*1024)/4)-1,D0
+.copy:	MOVE.L	(A0)+,(A1)+
+	DBF	D0,.copy
+.ret:	RTS
+.err:	BSR	CloseFile
+	LEA	tErSaveBram(PC),A0
+	BRA	ImpError
+
+; BramName from FileNom without its path and extension. A name over BramMax (FFS allows 30 with
+; ".bup") keeps its first 21 characters and gets a 4-digit hash, so similar long names stay apart.
+BramMax=26
+	CNOP	0,4
+BramMkName:
+	CLR.B	BramName
+	LEA	FileNom(PC),A0
+	MOVE.L	A0,A1			; A1 base name
+	SUB.L	A2,A2			; A2 its last dot
+.scan:	MOVE.B	(A0)+,D0
+	BEQ.S	.end
+	CMP.B	#"/",D0
+	BEQ.S	.sep
+	CMP.B	#":",D0
+	BEQ.S	.sep
+	CMP.B	#".",D0
+	BNE.S	.scan
+	LEA	-1(A0),A2
+	BRA.S	.scan
+.sep:	MOVE.L	A0,A1
+	SUB.L	A2,A2
+	BRA.S	.scan
+.end:	SUBQ.L	#1,A0
+	MOVE.L	A2,D0
+	BEQ.S	.noExt
+	MOVE.L	A2,A0
+.noExt:	MOVE.L	A0,D1
+	SUB.L	A1,D1			; D1 length
+	BEQ.S	.ret
+	LEA	BramName,A2
+	LEA	BramDir(PC),A0
+.dir:	MOVE.B	(A0)+,(A2)+
+	BNE.S	.dir
+	MOVE.B	#"/",-1(A2)
+	CMP.L	#BramMax,D1
+	BHI.S	.long
+	SUBQ.W	#1,D1
+.short:	MOVE.B	(A1)+,(A2)+
+	DBF	D1,.short
+	BRA.S	.ext
+.long:	MOVEQ	#0,D2
+	MOVE.L	A1,A0
+	SUBQ.W	#1,D1
+.hash:	MULU	#31,D2
+	MOVEQ	#0,D0
+	MOVE.B	(A0)+,D0
+	ADD.W	D0,D2
+	DBF	D1,.hash
+	MOVEQ	#21-1,D1
+.head:	MOVE.B	(A1)+,(A2)+
+	DBF	D1,.head
+	MOVE.B	#"_",(A2)+
+	MOVEQ	#4-1,D1
+.hex:	ROL.W	#4,D2
+	MOVE.W	D2,D0
+	AND.W	#15,D0
+	MOVE.B	.digits(PC,D0.W),(A2)+
+	DBF	D1,.hex
+.ext:	MOVE.L	#".bup",(A2)+
+	CLR.B	(A2)
+.ret:	RTS
+.digits:	DC.B	"0123456789abcdef"
+BramDir:	DC.B	"PROGDIR:Saves",0
+BramGot:	DC.B	0
+	EVEN
+BramName:	DS.B	50
+	CNOP	0,4
+	ENDC
 
 SavePrefs:
 	BSR	ActuPrefs

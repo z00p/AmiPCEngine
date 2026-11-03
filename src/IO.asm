@@ -73,11 +73,27 @@ IOAM_Buc:
 	MOVE.L	#$4855424D,SRAM		; 'HUBM': backup RAM formatted, as Mesen's new
 	MOVE.L	#$00A01080,SRAM+4	; 8 KB BRAM (end $A000, first free $8010)
 	ENDC
+	IFEQ	NO_BRAMSAVE
+	LEA	SRAM,A0			; BramDisk: the game's saved BRAM (BramLoad), else the blank one above
+	LEA	BramDisk,A1
+	TST.B	BramGot
+	BEQ.S	.bramCopy
+	EXG	A0,A1
+.bramCopy:
+	MOVE.W	#((8*1024)/4)-1,D0
+.bramLoop:
+	MOVE.L	(A0)+,(A1)+
+	DBF	D0,.bramLoop
+	ENDC
 
 	LEA	VRAM,A0
 	MOVE.W	#((32*1024)/4)-1,D0
 	BSR	BorraMem
 ;	-=-=-=-=-=-=-=-=-=-=-=-
+	IFEQ	NO_IOBUF
+	CLR.B	IoBuf
+	CLR.B	PadLatch
+	ENDC
 
 	RTS
 
@@ -501,13 +517,34 @@ readIO_0405:
 ; -------------------------------------------------------------------
 
 readIO_0800_0BFF:
+	IFEQ	NO_IOBUF
+	MOVE.B	IoBuf,(A4)
+	ENDC
 	RTS
 
 ; -------------------------------------------------------------------
 
 readIO_0C00_0FFF:
 	IFEQ	NO_TIMER
+	IFEQ	NO_IOBUF
+	MOVE.B	IoBuf,D1
+	AND.B	#$80,D1
+	IFEQ	NO_TIMER7F
+	BSR	TimerOr
+	ELSE
+	OR.B	TimerCount,D1
+	ENDC
+	MOVE.B	D1,IoBuf
+	MOVE.B	D1,(A4)
+	ELSE
+	IFEQ	NO_TIMER7F
+	MOVEQ	#0,D1
+	BSR	TimerOr
+	MOVE.B	D1,(A4)
+	ELSE
 	MOVE.B	TimerCount,(A4)	; timer counter (7 bits)
+	ENDC
+	ENDC
 	ENDC
 	RTS
 
@@ -515,14 +552,27 @@ readIO_0C00_0FFF:
 
 readIO_1000_13FF:
 	MOVE.B	JoyX(A3),D1
+	IFEQ	NO_IOBUF
+	BTST	#0,PadLatch		; (IOAM+$1000 holds the last read as well)
+	ELSE
 	BTST	#0,IOAM+$1000
+	ENDC
 	BNE.S	KeyLow
 	LSR.B	#4,D1
 KeyLow:
 	NOT.B	D1
 	AND.B	#$0F,D1
+	IFEQ	NO_IOBUF
+	BTST	#1,PadLatch		; CLR high: the pad gives 0
+	BEQ.S	.noClr
+	CLR.B	D1
+.noClr:
+	ENDC
 	IFEQ	NO_IOREAD
 	OR.B	#$30,D1			; bits 4 and 5 read 1
+	ENDC
+	IFEQ	NO_IOBUF
+	MOVE.B	D1,IoBuf
 	ENDC
 	MOVE.B	D1,(A4)
 	RTS
@@ -532,12 +582,33 @@ KeyLow:
 readIO_1400_17FF:
 	IFEQ	NO_TIMER
 	AND.W	#$0003,D0
+	IFEQ	NO_IOBUF
+; Only the low three bits are driven: the rest is the buffer (Download: STA $1403 with the
+; VDC status in A, then LDA $1403 / AND #$20 to see which interrupt it was). Reads load
+; the buffer too. $1400/$1401 are not driven at all.
+	CMP.W	#$0002,D0
+	BCC.S	.drv
+	MOVE.B	IoBuf,(A4)
+	RTS
+.drv:	BNE.S	.pend
+	MOVE.B	IOAM+$1402,D1		; the mask stays in the low bits of IOAM+$1402
+	BRA.S	.mix
+.pend:	MOVE.B	IRQ_Pending(A3),D1	; $1403: bit2 timer, bit1 IRQ1, bit0 IRQ2 pending
+.mix:	AND.B	#$07,D1
+	MOVE.B	IoBuf,D0
+	AND.B	#$F8,D0
+	OR.B	D0,D1
+	MOVE.B	D1,IoBuf
+	MOVE.B	D1,(A4)
+	RTS
+	ELSE
 	CMP.W	#$0003,D0
 	BNE.S	.notStatus
 	MOVE.B	IRQ_Pending(A3),D1	; $1403: bit2 timer, bit1 IRQ1, bit0 IRQ2 pending
 	AND.B	#$07,D1
 	MOVE.B	D1,(A4)
 .notStatus:
+	ENDC
 	ENDC
 	RTS
 
@@ -578,6 +649,22 @@ WriteIO:
 ;	BEQ	Escr0405
 
 	IFEQ	NO_TIMER
+	IFEQ	NO_IOBUF
+; $0800-$17FF: the byte stays on the I/O buffer (one MOVE.B on the PSG path).
+	CMP.W	#$0C00,D0
+	BCS.S	.psgBuf
+	CMP.W	#$1800,D0
+	BCC.S	.notTimerIrq
+	MOVE.B	(A4),IoBuf
+	CMP.W	#$1000,D0
+	BCS	writeTimer
+	CMP.W	#$1400,D0
+	BCC	writeIrqPort
+	MOVE.B	(A4),PadLatch
+	RTS
+.psgBuf:
+	MOVE.B	(A4),IoBuf
+	ELSE
 	CMP.W	#$0C00,D0
 	BCS.S	.notTimerIrq
 	CMP.W	#$1000,D0
@@ -586,6 +673,7 @@ WriteIO:
 	BCS.S	.notTimerIrq
 	CMP.W	#$1800,D0
 	BCS	writeIrqPort
+	ENDC
 .notTimerIrq:
 	ENDC
 	IFEQ	NO_PSGWAVE
@@ -873,12 +961,28 @@ writeIO_0403:
 	RTS
 writeIO_0404:
 	MOVE.B	(A4),PAL_Data+1(A3)
+	IFEQ	NO_VCELO
+	MOVE.W	PAL_Index(A3),D1	; the low byte goes in now, bit 8 stays
+	AND.W	#$01FF,D1
+	MOVE.B	(VDP_Pal.L,D1.W*2),PAL_Data+0(A3)
+	AND.B	#1,PAL_Data+0(A3)
+	BRA.S	VcePut
+	ENDC
 	RTS
 writeIO_0405:
 	MOVE.B	(A4),PAL_Data+0(A3)
 
 	MOVE.W	PAL_Index(A3),D1
 	AND.W	#$01FF,D1
+	IFEQ	NO_VCELO
+	AND.B	#1,PAL_Data+0(A3)	; bit 8 only, the low byte is the entry's own
+	MOVE.B	(VDP_Pal+1.L,D1.W*2),PAL_Data+1(A3)
+	BSR.S	VcePut
+	ADDQ.W	#1,D1
+	MOVE.W	D1,PAL_Index(A3)
+	RTS
+VcePut:
+	ENDC
 	IFEQ	NO_RTG|NO_RTGPAL
 	TST.B	RtgOn			; RTG: colour writes per line (mid-frame palette)
 	BEQ.S	.npl
@@ -892,6 +996,9 @@ writeIO_0405:
 .nbl:
 	ENDC
 	MOVE.W	PAL_Data(A3),(VDP_Pal.L,D1.W*2)
+	IFEQ	NO_VCELO
+	RTS
+	ENDC
 	ADDQ.W	#1,D1
 	MOVE.W	D1,PAL_Index(A3)
 	RTS
@@ -1011,6 +1118,29 @@ TimerLine:
 .done:
 	RTS
 
+	IFEQ	NO_TIMER7F
+; D1.B |= the counter as a read sees it. Counting down from 0 it shows $7F for a moment before the
+; reload (Mesen: Battle Royale's LDA $0C00 / BEQ with reload 0 reads $7F once, just before the
+; IRQ). Our underflow lands at the end of a line, so: counter 0, timer on, the tick falls at the end
+; of this line and 12 cycles or fewer are left in it (a 9-cycle polling loop always sees it).
+TimerOr:
+	TST.B	TimerCount
+	BNE.S	.cnt
+	TST.B	TimerOn
+	BEQ.S	.x
+	CMP.W	#1024-455,TimerAcc
+	BCS.S	.x
+	IFEQ	NO_CYCREG
+	CMP.L	#13<<16,D2		; upper word: cycles left in the line
+	ELSE
+	CMP.W	#13,(A3)		; Cycles(A3)
+	ENDC
+	BCC.S	.x
+	OR.B	#$7F,D1
+.x:	RTS
+.cnt:	OR.B	TimerCount,D1
+	RTS
+	ENDC
 TimerReload:	DC.B	0
 TimerCount:	DC.B	0
 TimerOn:	DC.B	0
@@ -1022,6 +1152,10 @@ TimerTicks:	DC.W	0
 IntVector:	DC.W	$FFF8
 	ENDC
 
+	IFEQ	NO_IOBUF
+IoBuf:	DC.B	0
+PadLatch:	DC.B	0
+	ENDC
 PSGWaveCnt:	DS.W	8
 PSGBuffer:	DS.B	8*8
 
@@ -1214,6 +1348,9 @@ DirMappers:	DS.L	256*2	; 00-FF
 IOAM:	DS.B	8*1024
 IRAM:	DS.B	8*1024
 SRAM:	DS.B	8*1024
+	IFEQ	NO_BRAMSAVE
+BramDisk:	DS.B	8*1024	; the BRAM as it is on disk, to see if the game changed it
+	ENDC
 
 EROM:	DS.B	8*1024
 LROM:	DS.B	8*1024

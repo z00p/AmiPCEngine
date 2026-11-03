@@ -31,7 +31,8 @@ OUTDIR    default release/drawer (not in git). Result:
 
 What goes in the drawer: the program, the AGA icon, the RTG icon, ReadMe.txt,
 CHANGES.txt, Debug rows.txt, and the empty Homebrew drawer (the program's
-Insert requester opens PROGDIR:Homebrew) with a short note in it. NO ROMs: the
+Insert requester opens PROGDIR:Homebrew) with a short note in it, and the Saves
+drawer for backup RAM, with a note too. NO ROMs: the
 script fails if anything that looks like a HuCard or disc image is staged.
 
 The LhA step is not here: it runs in WinUAE (winuae/make_lha.ps1).
@@ -49,6 +50,8 @@ PROGRAMS = {"AmiPCEngine", "AmiPCEngine RTG", "AmiPCEngine Debug", "AmiPCEngine 
 MARKER = re.compile(r"\[(John to decide|check after|end of check|OPTION)")
 HOMEBREW_NOTE = ("Put your HuCard files (.pce) here, or browse to them anywhere else.\n"
                  "AmiPCEngine's Insert requester opens this drawer.\n")
+SAVES_NOTE = ("AmiPCEngine keeps each game's backup RAM here, one .bup file per game.\n"
+              "Delete a game's file to start it afresh.\n")
 
 
 # ---- text for the Amiga -----------------------------------------------------
@@ -285,6 +288,9 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False):
     im = draw_drawer()
     di = drawer_icon(im)
     put("Homebrew.info", di)                                           # the ROM drawer's icon
+    os.makedirs(os.path.join(d, "Saves"))                              # backup RAM (the program makes it too)
+    open(os.path.join(d, "Saves", "Saves go here.txt"), "wb").write(SAVES_NOTE.encode("ascii"))
+    put("Saves.info", di)
     open(os.path.join(out, "AmiPCEngine.info"), "wb").write(di)        # the drawer's own icon
     check_no_roms(out)
     n = 0

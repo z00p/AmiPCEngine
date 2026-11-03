@@ -26,13 +26,13 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
-New in 1.1
+New in 1.2
 ----------
-Many more games run: Street Fighter II' Champion Edition (2.5 MB of Fast
-RAM), Populous, The Legendary Axe, Magical Chase, Parasol Stars and
-others. AGA: colour 0 follows the raster (HuZERO's road, Tongueman's
-Logic), sprites go behind the background on titles. RTG: more scanline
-settings. See CHANGES.txt.
+Backup RAM saves: games that save (high scores, progress) keep them in a
+Saves drawer, one file per game. More games run or look right, from a
+test of the whole HuCard library against Mesen: Order of the Griffon,
+Coryoon, Cyber Core, Download, Battle Royale, Night Creatures, Energy,
+World Circuit, Fighting Run and others. See CHANGES.txt.
 
 Requirements
 ------------
@@ -55,8 +55,8 @@ may legally have.
 
 Limits
 ------
-Not all games work. Not supported: CD-ROM games, SuperGrafx, backup
-RAM saves. Sound: 6 PSG channels on the Amiga's 4, the
+Not all games work. Not supported: CD-ROM games, SuperGrafx.
+Sound: 6 PSG channels on the Amiga's 4, the
 loudest four at each frame. AGA: one sprite palette shared by all
 sprites. Tested by us on an A1200 with a PiStorm (RTG mostly, AGA
 less) and in WinUAE. Not tested on a real 68030/040/060 card or ECS.
@@ -65,7 +65,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 and 1.1 by z00p. Web and menu graphics: Multivac. Thanks to Zener
+1.0 to 1.2 by z00p. Web and menu graphics: Multivac. Thanks to Zener
 and Sandman.
 
 PC Engine is a trademark of NEC and Hudson Soft, TurboGrafx-16 of NEC.

@@ -1673,6 +1673,25 @@ PonPalBuc4:
 	ENDC
 	ENDC
 
+	IFEQ	NO_BURST
+	MOVE.B	VDP_Regs+(5*2)+1,D0	; BG and sprites off: VCE entry $100 (see RtgFrame)
+	AND.B	#$C0,D0
+	BNE.S	.nburst
+	MOVE.W	VDP_Pal+$200,D1
+	MOVE.W	D1,D2
+	MOVE.W	D1,D3
+	LSR.W	#1,D3		; G
+	AND.W	#$00E0,D3
+	LSL.W	#6,D2		; R
+	AND.W	#$0E00,D2
+	LSL.W	#1,D1		; B
+	AND.W	#$000E,D1
+	OR.W	D2,D1
+	OR.W	D3,D1
+	MOVE.W	D1,COLOR+2
+.nburst:
+	ENDC
+
 	RTS
 
 	IFEQ	NO_BGLINE|NO_BGMASK

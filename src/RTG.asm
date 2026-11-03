@@ -1174,6 +1174,9 @@ RtgFrame:
 	AND.W	#$1F,D0			; by the width: no record of the VCE clock)
 	LSR.W	#8,D1
 	AND.W	#$7F,D1
+	IFEQ	NO_HSWPOS
+	MOVEQ	#2,D0			; the VCE's own sync each line: as HSW 2 (5 MHz), 3 (7 MHz)
+	ENDC
 	ADD.W	D1,D0
 	MOVE.B	VDP_Regs+(11*2)+1,D1
 	AND.W	#$7F,D1
@@ -1183,6 +1186,9 @@ RtgFrame:
 	BRA.S	.ho1
 .ho7:	CMP.W	#48,D1
 	BCC.S	.ho0			; 10 MHz: not known, left as it is
+	IFEQ	NO_HSWPOS
+	ADDQ.W	#1,D0
+	ENDC
 	SUBQ.W	#7,D0
 	BRA.S	.ho1
 .ho0:	MOVEQ	#0,D0
@@ -1259,7 +1265,16 @@ RtgFrame:
 	SUB.W	D0,D5
 	BSR	RtgBgLine
 	BRA.S	.spr
-.nobg:	LEA	RtgLineB+32,A1
+.nobg:
+	IFEQ	NO_BURST
+; BG and sprites both off from the start of the frame: burst mode, the VDC gives no
+; picture and the VCE shows entry $100 (Chew Man Fu between screens: colour 0 is green).
+	MOVE.B	RtgCR,D0
+	OR.B	RtgCRStart,D0
+	AND.B	#$C0,D0
+	BEQ	.border
+	ENDC
+	LEA	RtgLineB+32,A1
 	MOVE.W	RtgW,D0
 	LSR.W	#1,D0
 	SUBQ.W	#1,D0
@@ -1620,6 +1635,46 @@ RtgSprDec:
 	DBF	D7,.r
 	MOVEM.L	(SP)+,D0-D7/A0-A4
 	RTS
+	IFEQ	NO_SPR2BPP
+; RtgSprDec2: as RtgSprDec for sprite access mode 1: two planes as colour bits
+; 0-1, planes 0-1 (D2 = $FE) or 2-3 (D2 = $FD); valid byte = D2. All registers kept.
+RtgSprDec2:
+	MOVEM.L	D0-D7/A0-A4,-(SP)
+	LEA	RtgSValid,A0
+	MOVE.B	D2,(A0,D0.W)
+	MOVEQ	#0,D1
+	MOVE.W	D0,D1
+	LSL.L	#7,D1
+	LEA	VRAM,A0
+	ADD.L	D1,A0
+	CMP.B	#$FD,D2
+	BNE.S	.c0
+	LEA	64(A0),A0		; planes 2-3
+.c0:	ADD.L	D1,D1
+	RtgBuf	RtgSCache,A1
+	ADD.L	D1,A1
+	LEA	RtgSpread,A2
+	MOVEQ	#16-1,D7
+	MOVEQ	#0,D0
+.r:	MOVEQ	#2-1,D6
+	MOVE.L	A0,A4
+.h:	MOVE.B	(A4),D0
+	LEA	(A2,D0.W*8),A3
+	MOVE.L	(A3)+,D4
+	MOVE.L	(A3),D5
+	MOVE.B	32(A4),D0
+	LEA	2048(A2,D0.W*8),A3
+	OR.L	(A3)+,D4
+	OR.L	(A3),D5
+	MOVE.L	D4,(A1)+
+	MOVE.L	D5,(A1)+
+	ADDQ.L	#1,A4
+	DBF	D6,.h
+	ADDQ.L	#2,A0
+	DBF	D7,.r
+	MOVEM.L	(SP)+,D0-D7/A0-A4
+	RTS
+	ENDC
 
 ; RtgSprList: the SAT copy's sprites that reach a picture line, in SAT order,
 ; as RtgSprT entries (16 bytes): top, height, x, cells (1/2), pattern,
@@ -1658,8 +1713,27 @@ RtgSprList:
 	SUB.W	#32,D0
 	MOVE.W	D0,4(A1)
 	MOVE.W	4(A0),D0		; pattern
+	IFEQ	NO_SPR2BPP
+	MOVE.B	VDP_Regs+(9*2)+1,D2	; MWR sprite access mode 1: 2 planes,
+	AND.B	#$0C,D2			; bits 10-11 = 1 (CG 0: planes 0-1) or 2 (CG 1: 2-3)
+	CMP.B	#$04,D2
+	BNE.S	.m4
+	MOVE.W	D0,D2
+	LSR.W	#1,D0
+	AND.W	#$1FF,D0
+	BTST	#0,D2
+	BNE.S	.m3
+	BSET	#10,D0
+	BRA.S	.m5
+.m3:	BSET	#11,D0
+	BRA.S	.m5
+.m4:	LSR.W	#1,D0
+	AND.W	#$1FF,D0
+.m5:
+	ELSE
 	LSR.W	#1,D0
 	AND.W	#$3FF,D0
+	ENDC
 	MOVEQ	#1,D2
 	BTST	#8,D3
 	BEQ.S	.w1
@@ -1835,11 +1909,30 @@ RtgSprCellF:
 	RTS
 ; A0 = the cached row (D4 = row * 16) of pattern D0 (decoded first if needed).
 RtgSprSrc:
+	IFEQ	NO_SPR2BPP
+	CMP.W	#$200,D0
+	BCC.S	.two
+	LEA	RtgSValid,A0
+	CMP.B	#-1,(A0,D0.W)
+	BEQ.S	.ok
+	BSR	RtgSprDec
+	BRA.S	.ok
+.two:	MOVE.W	D0,D2
+	LSR.W	#8,D2
+	LSR.W	#2,D2
+	NOT.B	D2			; $FE or $FD
+	AND.W	#$1FF,D0
+	LEA	RtgSValid,A0
+	CMP.B	(A0,D0.W),D2
+	BEQ.S	.ok
+	BSR	RtgSprDec2
+	ELSE
 	AND.W	#$1FF,D0
 	LEA	RtgSValid,A0
 	TST.B	(A0,D0.W)
 	BNE.S	.ok
 	BSR	RtgSprDec
+	ENDC
 .ok:	MOVEQ	#0,D2
 	MOVE.W	D0,D2
 	LSL.L	#8,D2

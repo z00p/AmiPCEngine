@@ -258,6 +258,21 @@ CalStak:MACRO
 	ADDQ.L	#1,\2
 	ENDM
 
+
+; The push right after CalStak (which leaves C from the SUBQ.B on D6). SP wrapped from 0
+; to $FF: the byte belongs at $2100, A6 is $2200 by then (top of an empty stack).
+PushOne:MACRO
+	IFEQ	NO_STKWRAP
+	BCC.S	\@n
+	MOVE.B	\1,-$100(A6)
+	BRA.S	\@d
+\@n:	MOVE.B	\1,(A6)
+\@d:
+	ELSE
+	MOVE.B	\1,(A6)
+	ENDC
+	ENDM
+
 ; --------------------------------------------
 
 CheckReadIO:MACRO
@@ -338,12 +353,12 @@ TakeInterrupt:
 	ROR.W	#8,D1
 	SUBQ.B	#1,D6
 	CalStak	D6,A6
-	MOVE.B	D1,(A6)
+	PushOne	D1
 
 	ROR.W	#8,D1
 	SUBQ.B	#1,D6
 	CalStak	D6,A6
-	MOVE.B	D1,(A6)
+	PushOne	D1
 ;	-----------------------------------
 	MOVE.B	D3,D1
 	AND.W	#$000D,D1
@@ -355,7 +370,7 @@ TakeInterrupt:
 	OR.B	-(A4),D1
 	SUBQ.B	#1,D6
 	CalStak	D6,A6
-	MOVE.B	(Flags_Push.w,PC,D1.W),(A6)
+	PushOne	<(Flags_Push.w,PC,D1.W)>
 ;	-----------------------------------
 
 	ST	IFF(A3)			; ( DI ) Interrupciones OFF.
@@ -1354,12 +1369,12 @@ BRK_Interrupt:
 	ROR.W	#8,D1
 	SUBQ.B	#1,D6
 	CalStak	D6,A6
-	MOVE.B	D1,(A6)
+	PushOne	D1
 
 	ROR.W	#8,D1
 	SUBQ.B	#1,D6
 	CalStak	D6,A6
-	MOVE.B	D1,(A6)
+	PushOne	D1
 ;	-----------------------------------
 	MOVE.B	D3,D1
 	AND.W	#$000D,D1
@@ -1371,7 +1386,7 @@ BRK_Interrupt:
 	OR.B	-(A4),D1
 	SUBQ.B	#1,D6
 	CalStak	D6,A6
-	MOVE.B	(Flags_Push.w,PC,D1.W),(A6)
+	PushOne	<(Flags_Push.w,PC,D1.W)>
 ;	-----------------------------------
 	NextOP	8
 
@@ -1431,6 +1446,19 @@ JSRnn:	MOVE.W	(A5)+,D1
 	MOVE.W	D1,-(A6)
 	NextOP	7
 JSRDesbor:
+	IFEQ	NO_STKWRAP
+; SP was 1 (new SP $FF: high $2101, low $2100) or 0 (new SP $FE: high $2100, low $21FF).
+	CalStak	D6,A6
+	MOVE.W	A4,D1
+	SUBQ.W	#1,D1
+	CMP.B	#$FF,D6
+	BEQ.S	.sp1
+	MOVE.B	D1,(A6)
+	BRA.S	.hi
+.sp1:	MOVE.B	D1,-$100(A6)
+.hi:	LSR.W	#8,D1
+	MOVE.B	D1,1-$100(A6)
+	ELSE
 	MOVE.W	D6,D1
 	ADDQ.W	#1,D1
 	CalStak	D1,A6
@@ -1441,6 +1469,7 @@ JSRDesbor:
 	MOVE.B	D1,(A6)
 	CalStak	D6,A6
 	MOVE.B	D2,(A6)
+	ENDC
 	NextOP	7
 
 
@@ -1471,6 +1500,13 @@ RTSnn:
 	NextOP	7
 RTSDesbor:
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	CMP.B	#1,D6			; SP was $FF: both bytes in $2100, $2101
+	BNE.S	.fe			; SP was $FE: low from $21FF, in D1 already
+	MOVE.B	-2(A6),D1
+	LSL.W	#8,D1
+.fe:
+	ENDC
 	MOVE.B	-1(A6),D1
 	ROR.W	#8,D1
 	ADDQ.W	#1,D1
@@ -1525,6 +1561,18 @@ RTISiDesb:
 	SUBQ.B	#2,D6
 	CalStak	D6,A4
 	ADDQ.B	#2,D6
+	IFEQ	NO_STKWRAP
+; New SP 0, 1 or 2 = SP was $FD, $FE, $FF. At $FE the low byte is $2100, not $2200 (A4);
+; at $FF so are the flags: the P taken above came from $2200, so read it again.
+	CMP.B	#2,D6
+	BNE.S	.nf
+	MOVE.B	-3(A6),D3
+	BSR	RtiWrapP
+.nf:	CMP.B	#1,D6
+	BNE.S	.nl
+	SUB.W	#$100,A4
+.nl:
+	ENDC
 
 	MOVE.W	-1(A6),D1
 	MOVE.B	(A4),D1
@@ -1593,7 +1641,11 @@ PHPnn:
 
 PHPDesbor:
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	(Flags_Push.w,PC,D1.W),-$100(A6)
+	ELSE
 	MOVE.B	(Flags_Push.w,PC,D1.W),(A6)
+	ENDC
 	NextOP	3
 
 Flags_Push:	DS.B	256
@@ -1606,7 +1658,11 @@ PHAnn:
 	NextOP	3
 PHADesbor:
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	D7,-$100(A6)
+	ELSE
 	MOVE.B	D7,(A6)
+	ENDC
 	NextOP	3
 
 PHXnn:
@@ -1616,7 +1672,11 @@ PHXnn:
 	NextOP	3
 PHXDesbor:
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	D4,-$100(A6)
+	ELSE
 	MOVE.B	D4,(A6)
+	ENDC
 	NextOP	3
 
 PHYnn:
@@ -1626,7 +1686,11 @@ PHYnn:
 	NextOP	3
 PHYDesbor:
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	D5,-$100(A6)
+	ELSE
 	MOVE.B	D5,(A6)
+	ENDC
 	NextOP	3
 
 PLPnn:
@@ -1655,7 +1719,31 @@ PLPnn:
 	NextOP	3
 PLPDesbor:
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	-1(A6),D3		; SP was $FF: P is at $2100, (A6)+ took $2200
+	BSR	RtiWrapP
+	AND.B	#$0D,D3
+	ENDC
 	NextOP	3
+
+	IFEQ	NO_STKWRAP
+RtiWrapP:				; D3 = the P as popped; as RTInn and PLPnn
+	MOVE.B	D3,D2
+	LSR.B	#3,D2
+	SCS	IFF(A3)
+	LSR.B	#1,D2
+	SCS	DFF(A3)
+	LSR.B	#1,D2
+	SCS	BFF(A3)
+	BFINS	D2,DFF(A3){0:1}
+	LSR.B	#2,D2
+	SCS	VFF(A3)
+	IFEQ	NO_BCD
+	BSR	DecPop
+	ENDC
+	MOVE.B	(Flags_Pop.w,PC,D3.W),D3
+	RTS
+	ENDC
 
 Flags_Pop:	DS.B	256
 Flags_VBDI:	DS.L	256
@@ -1670,7 +1758,11 @@ PLAnn:
 PLADesbor:
 	MOVE.L	A6,A4
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	-$100(A4),D7
+	ELSE
 	MOVE.B	(A4),D7
+	ENDC
 	UpdateFlags NxZx
 	NextOP	3
 
@@ -1684,7 +1776,11 @@ PLXnn:
 PLXDesbor:
 	MOVE.L	A6,A4
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	-$100(A4),D4
+	ELSE
 	MOVE.B	(A4),D4
+	ENDC
 	UpdateFlags NxZx
 	NextOP	3
 
@@ -1698,7 +1794,11 @@ PLYnn:
 PLYDesbor:
 	MOVE.L	A6,A4
 	CalStak	D6,A6
+	IFEQ	NO_STKWRAP
+	MOVE.B	-$100(A4),D5
+	ELSE
 	MOVE.B	(A4),D5
+	ENDC
 	UpdateFlags NxZx
 	NextOP	3
 
@@ -1712,8 +1812,36 @@ SECnn:
 	NextOP	2
 CLInn:
 	SF	IFF(A3)
+	IFEQ	NO_CLIDELAY
+; The 6280 runs one more instruction before a pending IRQ (Order of the Griffon's timer
+; handler: CLI, then STA $1403). With an IRQ waiting, the line is cut after the next
+; instruction, CPU_Loop looks at the IRQ and PCE_Start runs the rest of the line.
+	MOVE.B	IOAM+$1402,D1
+	NOT.B	D1
+	AND.B	IRQ_Pending(A3),D1
+	AND.B	#$06,D1
+	BNE.S	CliWait
+	NextOP	2
+CliWait:
+	IFEQ	NO_CYCREG
+	MOVE.L	D2,D1
+	CLR.W	D1
+	SWAP	D1
+	AND.L	#$0000FFFF,D2
+	ELSE
+	MOVE.W	(A3),D1
+	CLR.W	(A3)
+	ENDC
+	SUBQ.W	#2,D1
+	BCS.S	.nr
+	ADD.W	D1,CliRest
+.nr:
+	NextOP	0
+CliRest:	DC.W	0
+	ELSE
 	BSR	CheckInterrupt
 	NextOP	2
+	ENDC
 SEInn:
 	ST	IFF(A3)
 	NextOP	2
@@ -2033,22 +2161,40 @@ BBS7:	BSSi	7,NE,6
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ST0nn:
+	IFEQ	NO_STIO
+	LEA	IOAM+0,A4		; the VDC whatever MPR0 holds
+	MOVE.B	(A5)+,(A4)
+	BSR	WriteIO
+	ELSE
 	MOVEQ	#0,D1
 	CalPagE	D1,A4
 	MOVE.B	(A5)+,(A4)
 	CheckWriteIO
+	ENDC
 	NextOP	4
 ST1nn:
+	IFEQ	NO_STIO
+	LEA	IOAM+2,A4		; the VDC whatever MPR0 holds
+	MOVE.B	(A5)+,(A4)
+	BSR	WriteIO
+	ELSE
 	MOVEQ	#2,D1
 	CalPagE	D1,A4
 	MOVE.B	(A5)+,(A4)
 	CheckWriteIO
+	ENDC
 	NextOP	4
 ST2nn:
+	IFEQ	NO_STIO
+	LEA	IOAM+3,A4		; the VDC whatever MPR0 holds
+	MOVE.B	(A5)+,(A4)
+	BSR	WriteIO
+	ELSE
 	MOVEQ	#3,D1
 	CalPagE	D1,A4
 	MOVE.B	(A5)+,(A4)
 	CheckWriteIO
+	ENDC
 	NextOP	4
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -2451,11 +2597,32 @@ BlkGo:	MOVEQ	#0,D3
 .done:	MOVEM.L	(SP)+,D3-D7/A0
 	MOVEQ	#0,D1			; 17 + 6 cycles a byte; D1's upper word left 0
 	MOVE.W	TnnCyclesCount(A3),D1
+	IFEQ	NO_BLKTIME
+; The CPU is held for the whole transfer: what does not fit in this line is owed
+; by the lines after it (BlkDebt, paid in PCE_Start), no IRQ in between.
+	BNE.S	.n64
+	MOVE.L	#$10000,D1		; (0 = 65536 bytes)
+.n64:	MULU.L	#6,D1
+	ADD.L	#17,D1
+	MOVEQ	#0,D0
+	IFEQ	NO_CYCREG
+	MOVE.L	D2,D0
+	CLR.W	D0
+	SWAP	D0			; cycles left in the line
+	ELSE
+	MOVE.W	(A3),D0			; Cycles(A3)
+	ENDC
+	CMP.L	D0,D1
+	BLS.S	.cyc
+	SUB.L	D0,D1
+	MOVE.L	D1,BlkDebt
+	ELSE
 	BEQ.S	.big			; (0 = 65536 bytes)
 	MULU.W	#6,D1
 	ADD.L	#17,D1
 	CMP.L	#$FFFF,D1
 	BLS.S	.cyc
+	ENDC
 .big:
 	IFEQ	NO_CYCREG
 	AND.L	#$0000FFFF,D2		; no cycles left in this line
@@ -2466,6 +2633,25 @@ BlkGo:	MOVEQ	#0,D3
 .cyc:	NextOP	D1
 BlkStep:	DC.W	1,1, -1,-1, 1,0, 1,0, 0,1	; source, destination steps: TII TDD TIN TIA TAI
 BlkByte:	DC.W	0
+	IFEQ	NO_BLKTIME
+BlkDebt:	DC.L	0		; CPU cycles a block transfer still holds the CPU for
+; PCE_Start, before a line's CPU_Loop: D0.W = the line's cycles. Pays the debt out of
+; them; D0.W = what is left for the CPU (0: the whole line goes to the transfer).
+BlkPay:	MOVE.L	D1,-(SP)
+	AND.L	#$FFFF,D0
+	MOVE.L	BlkDebt,D1
+	SUB.L	D0,D1
+	BCS.S	.part
+	MOVE.L	D1,BlkDebt
+	MOVEQ	#0,D0
+	MOVE.L	(SP)+,D1
+	RTS
+.part:	NEG.L	D1			; the line has some cycles over
+	MOVE.L	D1,D0
+	CLR.L	BlkDebt
+	MOVE.L	(SP)+,D1
+	RTS
+	ENDC
 	ENDC
 
 

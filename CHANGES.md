@@ -4,6 +4,18 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 1.2
+
+- Backup RAM saves: a game's saves (high scores, progress) are kept in
+  a Saves drawer next to the emulator, one 8 KB file per game, written
+  when you go back to the menu and only if the game changed something.
+- More games run or look right, from a test of every HuCard in a full
+  library against Mesen: Order of the Griffon, Coryoon, Cyber Core,
+  Download, Tricky Kick, Chew Man Fu, Battle Royale, Maniac Puroresu,
+  Night Creatures, Psychosis, Energy, Deep Blue Kaitei Shinwa, Ganbare
+  Golf Boys, Rock-On, World Circuit, Andre Panza Kick Boxing and
+  Fighting Run (see "Games that now work" below).
+
 ## New in 1.1
 
 - Street Fighter II' Champion Edition runs (its 2.5 MB mapper), and
@@ -139,6 +151,31 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
   Squad's logo unpacks properly.
 - Scroll writes just after a line starts count for the line before:
   Dungeon Explorer's status panel sits where it should.
+- The stack wraps inside its page, as on the CPU: Tricky Kick and
+  Coryoon start.
+- An interrupt waiting when the game clears the I flag is taken one
+  instruction later, as on the CPU: Order of the Griffon starts.
+- The I/O page's data buffer: the unused bits of the I/O ports read
+  back the last byte written there, as on the console. Download and
+  Cyber Core start.
+- With background and sprites both off, the screen shows the colour the
+  console shows: Chew Man Fu's green screen is gone.
+- The stack pointer at power on is set as the console sets it, so games
+  that never set it themselves no longer crash at the first interrupt:
+  Psychosis (Paranoia), Energy, Night Creatures, Deep Blue Kaitei
+  Shinwa, Ganbare Golf Boys.
+- The timer counter reads $7F just before it runs out from 0: Battle
+  Royale gets past its title.
+- Long block transfers take their real time, up to several frames,
+  instead of one line: Maniac Puroresu starts.
+- A palette colour written one byte at a time changes at once: World
+  Circuit's backdrop.
+- RTG: the picture is placed by the display start alone, not moved by
+  the sync width, so it no longer sits off to one side in some games.
+- The video chip's ports are reached whatever memory bank the game has
+  paged in.
+- RTG: sprites in the video chip's 2-plane mode are drawn (Fighting
+  Run's portraits).
 
 ## Controllers
 

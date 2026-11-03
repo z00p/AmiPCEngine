@@ -137,8 +137,12 @@ items, the rest of the Options menu, and the Read/Save RAM-Batt and
 Clear RAM gadgets. The Refresh and Inter gadgets and the Emulation
 Speed bar are ghosted too.
 
-Games that save to backup RAM start with a formatted, empty one each
-time. Nothing is kept between runs.
+Games that save to backup RAM keep their saves: one 8 KB file per
+game in a Saves drawer next to the emulator, named after the ROM.
+It's written when you go back to the menu with Esc or Help, and
+only if the game changed something, so go back to the menu before
+you switch off. The emulator's drawer has to be writable. Delete a
+game's file to start it from scratch.
 
 
 5. Controllers and keys
@@ -196,7 +200,7 @@ Not supported (there is no code for them)
   * CD-ROM, Super CD-ROM and Arcade Card games. HuCards only.
   * SuperGrafx games (no second VDC or priority chip).
   * The sprite overflow and collision flags, multitap, the 6-button
-    pad. Backup RAM is not saved.
+    pad.
   * On AGA, sprite priority per sprite: all sprites go behind the
     background only in a frame where every one of them asks for it,
     otherwise all stay in front. Every sprite shares one set of
@@ -251,7 +255,8 @@ Known faults
          started: all
          six sound channels, DDA samples, every sprite palette on an
          RTG screen, and full speed on an A1200 with a PiStorm.
-         Version 1.0 came out on 31 October, 1.1 on 2 November.
+         Version 1.0 came out on 31 October, 1.1 on 2 November and
+         1.2 on 3 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -265,7 +270,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 and 1.1   z00p
+  Versions 1.0 to 1.2    z00p
   Web and menu graphics  Multivac
   With thanks to         Zener and Sandman
   Built with             Devpac III (HiSoft) and GadToolsBox (Jaba
@@ -280,7 +285,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 and 1.1, by z00p, are community updates
+Entertainment). Versions 1.0 to 1.2, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

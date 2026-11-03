@@ -192,7 +192,27 @@ noVblankInt:
 	MOVE.L	(SP)+,D0
 .nopc:
 	ENDC
+	IFEQ	NO_BLKTIME
+	TST.L	BlkDebt			; a block transfer still running?
+	BEQ.S	.nodebt
+	JSR	BlkPay
+	TST.W	D0
+	BEQ	.blkLine
+.nodebt:
+	ENDC
 	BSR	CPU_Loop
+	IFEQ	NO_CLIDELAY
+.cliRest:
+	MOVE.W	CliRest,D0		; a CLI with an IRQ waiting cut the line
+	BEQ.S	.cliNo
+	CLR.W	CliRest
+	BSR	CPU_Loop
+	BRA.S	.cliRest
+.cliNo:
+	ENDC
+	IFEQ	NO_BLKTIME
+.blkLine:
+	ENDC
 	IFEQ	NO_TIMER
 	BSR	TimerLine
 	ENDC
@@ -239,14 +259,22 @@ BorraMem:
 
 	CNOP	0,8
 InitReg:
+	IFEQ	NO_SPINIT
+	DC.L	0,0,$0100,0,0,0,$0100,0	; D0-D7 (D6: SP = 0)
+	ELSE
 	DC.L	0,0,$0100,0,0,0,$01FF,0	; D0-D7
+	ENDC
 	DC.L	0			; A0
 	DC.L	0			; A1
 	DC.L	Regs+Restas+(4*8)	; A2
 	DC.L	Regs			; A3
 	DC.L	0			; A4
 	DC.L	0			; A5
+	IFEQ	NO_SPINIT
+	DC.L	IRAM+$0101		; A6 = $2100 + SP + 1
+	ELSE
 	DC.L	IRAM+$01FF		; A6
+	ENDC
 
 
 

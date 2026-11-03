@@ -265,11 +265,50 @@ NO_SPRBACK=0
 	IFND	NO_IOREAD	; I/O read-backs as Mesen's: $1000 bits 4-5, $0405 bits 1-7, $0001 = 0, $1402 = 0 at reset
 NO_IOREAD=0
 	ENDC
-	IFND	NO_PSGBASS	; 0 = a bass tone (F >= $300, under 190 Hz) outranks a louder chord note for the four Paula voices. OFF by default: for John's ears
+	IFND	NO_PSGBASS	; 0 = a bass tone (F >= $300, under 190 Hz) outranks a louder chord note for the four Paula voices. OFF by default: the plain mix sounded better by ear
 NO_PSGBASS=1
 	ENDC
 	IFND	NO_RCRLATE	; 1 = a scroll write early in a line counts for the line after it, however early
 NO_RCRLATE=0
+	ENDC
+	IFND	NO_STKWRAP	; 1 = the wrap paths of the 6280 stack missed page $21 (Tricky Kick runs with SP = $01 and wraps all the time)
+NO_STKWRAP=0
+	ENDC
+	IFND	NO_CLIDELAY	; 1 = CLI takes a pending IRQ at once; 0 = after the next instruction, as the 6280 (Order of the Griffon: CLI, then STA $1403)
+NO_CLIDELAY=0
+	ENDC
+	IFND	NO_IOBUF	; 1 = no I/O buffer; 0 = open bits of $0800-$17FF read the last byte on the buffer (Download reads $20 back from $1403), pad CLR, SEL held apart
+NO_IOBUF=0
+	ENDC
+	IFND	NO_BURST	; 1 = BG and sprites off show colour 0; 0 = VCE entry $100, as the VDC's burst mode (Chew Man Fu, black between screens)
+NO_BURST=0
+	ENDC
+	IFND	NO_BRAMSAVE	; 1 = backup RAM starts blank at every Power ON and nothing is kept; 0 = kept per game in PROGDIR:Saves
+NO_BRAMSAVE=0
+	ENDC
+	IFND	NO_TIMER7F	; 1 = the timer counter reads 0 all through its last count; 0 = $7F on the last cycles before it underflows from 0, as Mesen (Battle Royale waits for a non-zero $0C00 with reload 0)
+NO_TIMER7F=0
+	ENDC
+	IFND	NO_BLKTIME	; 1 = a block transfer (TII/TDD/TIN/TIA/TAI) ends its line and its other cycles are lost; 0 = they take the lines after it (Energy, Cyber Cross: a 12 KB TIA is 2.5 frames)
+NO_BLKTIME=0
+	ENDC
+	IFND	NO_SPINIT	; 1 = power on with SP $FF but A6 at $21FF (one byte low: a push before the first TXS or IRQ lands one byte off); 0 = SP 0 and A6 to match, as Mesen (Psychosis, Golf Boys, Deep Blue never set SP)
+NO_SPINIT=0
+	ENDC
+	IFND	NO_VCELO	; 1 = a $0404 write waits for $0405 and $0405 writes the latched low byte; 0 = each byte goes into the entry at once, as the VCE (World Circuit's backdrop: $0404 alone)
+NO_VCELO=0
+	ENDC
+	IFND	NO_HSWPOS	; 1 = RTG picture moved by HSW + HDS; 0 = by HDS only: the VCE starts every line with its own sync, so the VDC's HSW does not move it (Strip Fighter II, HSW 16)
+NO_HSWPOS=0
+	ENDC
+	IFND	NO_STIO	; 1 = ST0/ST1/ST2 write through MPR0; 0 = always to the VDC, as the 6280 (Bikkuriman World runs with MPR0 = ROM bank 1)
+NO_STIO=0
+	ENDC
+	IFND	NO_SPR2BPP	; 1 = RTG: sprites always 4 planes; 0 = MWR sprite mode 1 draws 2-plane sprites, the SAT CG bit picks planes 0-1 or 2-3 (Fighting Run portrait)
+NO_SPR2BPP=0
+	ENDC
+	IFND	NO_REL12	; 1 = 1.1 version texts
+NO_REL12=0
 	ENDC
 	IFND	NO_REL11	; 1 = 1.0 version texts
 NO_REL11=0
@@ -381,7 +420,11 @@ NF_Menu:
 	CNOP	0,8
 	IFEQ	NO_REL10
 	IFEQ	NO_REL11
+	IFEQ	NO_REL12
+	DC.B	"$VER:AmiPC-Engine Emulator v1.2 (3.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.1 (2.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.0 (31.10.26)",0,0
 	ENDC
@@ -1110,6 +1153,9 @@ AutoWriteResult:
 	IFNE	DdaStat
 	JSR	DdaStatFill
 	ENDC
+	IFNE	DbgRows
+	JSR	DbgAutoFill
+	ENDC
 	MOVE.L	$4.W,A6
 	LEA	AutoDosName,A1
 	MOVEQ	#0,D0
@@ -1130,6 +1176,12 @@ AutoWriteResult:
 	MOVE.L	D4,D1
 	MOVE.L	#DdaStatTxt,D2
 	MOVE.L	#DdaStatEnd-DdaStatTxt,D3
+	JSR	-48(A6)			; Write
+	ENDC
+	IFNE	DbgRows
+	MOVE.L	D4,D1
+	MOVE.L	#DbgAutoTxt,D2
+	MOVE.L	#DbgAutoTxtEnd-DbgAutoTxt,D3
 	JSR	-48(A6)			; Write
 	ENDC
 	IFNE	CodeCheck
