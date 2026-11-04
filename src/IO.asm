@@ -363,6 +363,10 @@ ReadIO:
 	MOVE.L	A4,D0
 	SUB.L	#IOAM,D0
 	BCS.S	ReadIO_RET
+	IFEQ	NO_IOSLOT
+	CMP.L	#$2000,D0		; slot 0 holds ROM or RAM, not the I/O page (Bikkuriman World
+	BCC.S	ReadIO_RET		; runs code at $0C00 with MPR0 = ROM bank 1)
+	ENDC
 ReadIOtia:
 	CMP.W	#$0400,D0
 	BCS.S	readIO_0000_03FF
@@ -630,6 +634,10 @@ WriteIO:
 	MOVE.L	A4,D0
 	SUB.L	#IOAM,D0
 	BCS.S	WriteIO_RET
+	IFEQ	NO_IOSLOT
+	CMP.L	#$2000,D0		; not the I/O page
+	BCC.S	WriteIO_RET
+	ENDC
 
 
 	CMP.W	#$0400,D0
@@ -1332,6 +1340,9 @@ VdcVblank:
 	IFEQ	NO_VDLATE
 RrLine:	DC.W	-1
 VdLate:	DC.W	-1
+	ENDC
+	IFEQ	NO_VDMID|NO_VDLATE
+VdMid:	DC.W	0		; (byte used)
 	ENDC
 VblLine:	DC.W	251
 SatbPend:	DC.B	0

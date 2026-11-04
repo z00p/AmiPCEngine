@@ -720,13 +720,21 @@ MainMenuWTitle:
 	IFEQ	NO_REL11
 	IFNE	DbgRows
 	IFEQ	NO_REL12
+	IFEQ	NO_REL13
+    DC.B    'AmiPC-Engine Emulator v1.3  (Debug rows)',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v1.2  (Debug rows)',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v1.1  (Debug rows)',0
 	ENDC
 	ELSE
 	IFEQ	NO_REL12
+	IFEQ	NO_REL13
+    DC.B    'AmiPC-Engine Emulator v1.3',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v1.2',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v1.1',0
 	ENDC
@@ -1654,21 +1662,33 @@ HelpPageIText22:
 	IFEQ	NO_REL11
 AboutIText0:
 	IFEQ	NO_REL12
+	IFEQ	NO_REL13
+    DC.B    'AmiPC-Engine Emulator v1.3',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v1.2',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v1.1',0
 	ENDC
 
 AboutIText1:
 	IFEQ	NO_REL12
+	IFEQ	NO_REL13
+    DC.B    '(4 November 2026)',0
+	ELSE
     DC.B    '(3 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(2 November 2026)',0
 	ENDC
 
 AboutITextZ:
 	IFEQ	NO_REL12
+	IFEQ	NO_REL13
+    DC.B    'Version 1.3: z00p',0
+	ELSE
     DC.B    'Version 1.2: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 1.1: z00p',0
 	ENDC

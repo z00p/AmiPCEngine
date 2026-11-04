@@ -265,6 +265,12 @@ NO_SPRBACK=0
 	IFND	NO_IOREAD	; I/O read-backs as Mesen's: $1000 bits 4-5, $0405 bits 1-7, $0001 = 0, $1402 = 0 at reset
 NO_IOREAD=0
 	ENDC
+	IFND	NO_SATLAG	; 1 = sprites drawn from the SAT the VDC copies at this frame's vblank (one frame early); 0 = from the SAT the frame was shown with, as the VDC (Power Tennis's net sprite over the scrolling net)
+NO_SATLAG=0
+	ENDC
+	IFND	NO_PSGSTICK	; 1 = a channel that has a Paula voice keeps it with a bonus of 6 (Paula volume units); 0 = 20, so channels change speaker less often
+NO_PSGSTICK=0
+	ENDC
 	IFND	NO_PSGBASS	; 0 = a bass tone (F >= $300, under 190 Hz) outranks a louder chord note for the four Paula voices. OFF by default: the plain mix sounded better by ear
 NO_PSGBASS=1
 	ENDC
@@ -306,6 +312,24 @@ NO_STIO=0
 	ENDC
 	IFND	NO_SPR2BPP	; 1 = RTG: sprites always 4 planes; 0 = MWR sprite mode 1 draws 2-plane sprites, the SAT CG bit picks planes 0-1 or 2-3 (Fighting Run portrait)
 NO_SPR2BPP=0
+	ENDC
+	IFND	NO_VDRACE	; 1 = a VDC IRQ is always taken first; 0 = in a status poll (LDA $0000 / AND / BEQ back) the read wins, as when the flag rises inside the LDA (Cyber Cross polls VD with IRQ1 on)
+NO_VDRACE=0
+	ENDC
+	IFND	NO_VDMID	; 1 = RR and VD on one line: VD a line later; 0 = VD about 190 cycles into that line, as Mesen, so the RR's IRQ is taken first (Power Tennis: RR on every line)
+NO_VDMID=0
+	ENDC
+	IFND	NO_IOSLOT	; 1 = a slot-0 access with ROM or RAM in MPR0 is taken as I/O by its offset's low word; 0 = only the I/O page is I/O (Bikkuriman World runs code and reads tables at $0000-$1FFF with MPR0 = ROM)
+NO_IOSLOT=0
+	ENDC
+	IFND	NO_INDRD	; 1 = LDA/ADC/CMP.. ($zp) read memory without the I/O check; 0 = into slot 0 they go through ReadIO, as ($zp),Y does (TaleSpin reads the VDC status with LDA ($78))
+NO_INDRD=0
+	ENDC
+	IFND	NO_TSTROM	; 1 = TST #imm,abs / abs,X reads the write page (a ROM slot's write sink, not the ROM); 0 = the read page (Momotarou Densetsu Gaiden / II: TST #$FF,$48AA,X on a ROM table picks the text font)
+NO_TSTROM=0
+	ENDC
+	IFND	NO_REL13	; 1 = 1.2 version texts
+NO_REL13=0
 	ENDC
 	IFND	NO_REL12	; 1 = 1.1 version texts
 NO_REL12=0
@@ -421,7 +445,11 @@ NF_Menu:
 	IFEQ	NO_REL10
 	IFEQ	NO_REL11
 	IFEQ	NO_REL12
+	IFEQ	NO_REL13
+	DC.B	"$VER:AmiPC-Engine Emulator v1.3 (4.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.2 (3.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.1 (2.11.26)",0,0
 	ENDC
@@ -2142,6 +2170,7 @@ Salir:
 	BSR	DescongelaAMIGA
 	IFEQ	NO_RTG
 	JSR	RtgPlayClose
+	JSR	RtgQuit			; test builds too: the big buffers and tall pictures back
 	ENDC
 	JMP	AutoWriteResult		; OS is back: write the counts, RTS to the caller
 	ENDC

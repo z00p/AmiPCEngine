@@ -4,6 +4,18 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 1.3
+
+- More games run or look right: TaleSpin, Cyber Cross, Lode Runner:
+  Lost Labyrinth, Momotarou Densetsu Gaiden and Momotarou Densetsu II,
+  Power Tennis, Bikkuriman World, Benkei Gaiden and Dragon Egg! (see
+  "Games that now work" below).
+- Sprites are shown one frame after the game sets them, as on the
+  console, so they keep in step with a scrolling background (Power
+  Tennis's net no longer shows a black block when the camera moves).
+- Sound: a channel keeps its Amiga voice longer, so a sound jumps
+  between the left and right speakers less often.
+
 ## New in 1.2
 
 - Backup RAM saves: a game's saves (high scores, progress) are kept in
@@ -105,6 +117,14 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
 ## Games that now work or work better
 
+- 1.3: a game that polls the vblank flag with its interrupt on sees it
+  (Cyber Cross's title, Lode Runner: Lost Labyrinth's fade-in); LDA
+  (zp) through a pointer into the I/O page reads the I/O port (TaleSpin);
+  TST reads a ROM table, not the bank's write side (Momotarou Densetsu
+  Gaiden and II's menu text); the vblank comes part way into a line that
+  also has a raster interrupt (Power Tennis, Benkei Gaiden, Dragon Egg!);
+  ROM mapped into the first 8 KB slot is read as ROM, not as I/O
+  (Bikkuriman World).
 - HuC6280 timer and its interrupt (v0.5 had none).
 - Block transfers (TII, TDD, TIN, TIA, TAI) cross memory pages and
   reach the I/O page correctly. This fixed the text colours in

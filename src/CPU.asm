@@ -304,10 +304,71 @@ CPU_Loop:
 
 	MOVE.L	#$0100,D2
 	ENDC
-
+	IFEQ	NO_VDRACE
+	BTST	#1,IRQ_Pending(A3)	; a VDC IRQ comes in at this line start
+	BNE	CpuLpRace
+	ENDC
+CpuLpChk:
+	IFEQ	NO_VDRACE
+	BSR	CheckInterrupt
+	ELSE
 	BSR.S	CheckInterrupt
-
+	ENDC
+CpuLpGo:
 	NextOP	0
+	IFEQ	NO_VDRACE
+; The VDC raises its IRQ in the middle of an instruction. In a status poll with IRQ1 on, when
+; the flag rises during the LDA $0000 the read sees it and acknowledges it before the IRQ is
+; taken, so the poll ends (Mesen: Cyber Cross waits for VD at $A134, Lode Runner Lost Labyrinth
+; at $5CAE; each gets out after a few frames). Here: at a line start with an IRQ1 pending and
+; the CPU just past such an LDA (at its AND), the IRQ waits and the poll reads the flag.
+; Polls: LDA $0000 / AND #n / BEQ or BNE back to the LDA, or
+;        LDA $0000 / AND #n / CMP #0 / BNE +3 / JMP to the LDA.
+CpuLpRace:
+	BTST	#2,IRQ_Pending(A3)	; the timer as well (pending and enabled): as before
+	BEQ.S	CpuLpNt
+	BTST	#2,IOAM+$1402
+	BEQ.S	CpuLpChk
+CpuLpNt:
+	CMP.B	#$FF,TabMap(A3)		; I/O page in MPR0
+	BNE.S	CpuLpChk
+	CMP.B	#$29,(A5)		; AND #n, after LDA $0000
+	BNE.S	CpuLpChk
+	CMP.B	#$AD,-3(A5)
+	BNE.S	CpuLpChk
+	TST.B	-2(A5)
+	BNE.S	CpuLpChk
+	TST.B	-1(A5)
+	BNE.S	CpuLpChk
+	MOVE.B	2(A5),D1
+	CMP.B	#$C9,D1
+	BEQ.S	CpuLpCmp
+	CMP.B	#$F9,3(A5)		; Bcc back to the LDA
+	BNE.S	CpuLpChk
+	CMP.B	#$F0,D1
+	BEQ	CpuLpGo			; the read wins, the IRQ is not taken here
+	CMP.B	#$D0,D1
+	BEQ	CpuLpGo
+	BRA	CpuLpChk
+CpuLpCmp:				; CMP #0 / BNE +3 / JMP to the LDA
+	TST.B	3(A5)
+	BNE	CpuLpChk
+	CMP.B	#$D0,4(A5)
+	BNE	CpuLpChk
+	CMP.B	#$03,5(A5)
+	BNE	CpuLpChk
+	CMP.B	#$4C,6(A5)
+	BNE	CpuLpChk
+	MOVE.B	8(A5),D0
+	LSL.W	#8,D0
+	MOVE.B	7(A5),D0
+	MOVE.W	A5,D1
+	SUB.W	(A2),D1
+	SUBQ.W	#3,D1			; logical address of the LDA
+	CMP.W	D0,D1
+	BEQ	CpuLpGo
+	BRA	CpuLpChk
+	ENDC
 
 ; --------------------------------------------
 
@@ -490,6 +551,9 @@ MIns:	MACRO
 	MOVE.W	(IRAM,D1.L),D1
 	ROR.W	#8,D1
 	CalPag	D1,A4
+	IFEQ	NO_INDRD
+	CheckReadIO			; LDA ($zp) into slot 0 reads the I/O page (TaleSpin reads the VDC status this way)
+	ENDC
 	ELSEIF
 	ADD.B	\3,D1
 	ENDC
@@ -952,7 +1016,15 @@ Test:	MACRO
 	IFNC	"nn","\3"
 	ADD.W	\3,D1
 	ENDC
+	IFC	"D0","\2"
+	IFEQ	NO_TSTROM
+	CalPag	D1,A4			; TST only reads: from the read page (ROM in this slot reads as ROM)
+	ELSE
 	CalPagE	D1,A4
+	ENDC
+	ELSEIF
+	CalPagE	D1,A4
+	ENDC
 	TST.B	D1
 	BEQ	\@io
 	TestOp	\1,\2,\6

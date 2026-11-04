@@ -324,7 +324,11 @@ PrintSprites_AGA:
 	ENDC
 	lea	SpriteBufer+(SprBufNextBpl*0),A0
 	lea	SpriteBufer+(SprBufNextBpl*2),A1
+	IFEQ	NO_SATLAG
+	lea	SatShown,A4
+	ELSE
 	lea	SpriteCoor,A4
+	ENDC
 
 	move.w	#64-1,D0	; 64 Sprites to proccess
 .priSprBuc1:
@@ -1500,7 +1504,11 @@ PonPalBuc:
 	clr.l	8(A5)
 	clr.l	12(A5)
 
+	IFEQ	NO_SATLAG
+	lea	SatShown,A4
+	ELSE
 	lea	SpriteCoor,A4
+	ENDC
 
 	IFEQ	NO_SPRBACK|NO_BGMASK
 	moveq	#0,D7		; bit 0: a sprite in the window, bit 1: one over the BG

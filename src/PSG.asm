@@ -314,7 +314,11 @@ PSGAllocate:
 	BMI.S	.nob
 	TST.W	(PSGScore.L,D1.W*2)
 	BEQ.S	.nob
+	IFEQ	NO_PSGSTICK
+	ADD.W	#20,(PSGScore.L,D1.W*2)	; sticky: fewer speaker changes
+	ELSE
 	ADDQ.W	#6,(PSGScore.L,D1.W*2)
+	ENDC
 .nob:	DBF	D0,.bonus
 	MOVEQ	#0,D6			; rank: channels ahead of this one
 .rank:	MOVE.W	(PSGScore.L,D6.W*2),D1

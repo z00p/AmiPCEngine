@@ -51,6 +51,18 @@ PCE_Start:
 	MOVEQ.L	#0,D0
 	MOVE.L	#263-1,D1	; Total number of vertical scan-lines (0 to 223 = Screen, 224 to end = border)
 
+	IFEQ	NO_SATLAG
+	MOVEM.L	D2/A0/A1,-(SP)		; the SAT this frame shows: the one DMA'd at the last vblank
+	LEA	SpriteCoor,A0
+	LEA	SatShown,A1
+	MOVEQ	#(64*8)/16-1,D2
+.sat:	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	DBF	D2,.sat
+	MOVEM.L	(SP)+,D2/A0/A1
+	ENDC
 	clr.w	ScanLine(A3)
 	bsr	logScrollXY
 
@@ -99,8 +111,12 @@ noRasterInt:
 .vdNow:	CMP.W	RrLine,D0
 	BNE.S	.vdRun
 	MOVE.W	#-1,RrLine
+	IFEQ	NO_VDMID
+	ST	VdMid			; VD part way into this line, after the RR's IRQ (below)
+	ELSE
 	ADDQ.W	#1,D2
 	MOVE.W	D2,VdLate
+	ENDC
 	BRA.S	.vdNo
 .vdRun:
 	ELSE
@@ -200,6 +216,29 @@ noVblankInt:
 	BEQ	.blkLine
 .nodebt:
 	ENDC
+	IFEQ	NO_VDMID|NO_VDLATE|NO_VDCDMA
+; RR and VD on one line: Mesen raises VD about 190 CPU cycles after the RR (raster IRQ at hclock
+; ~1190, VD at ~396 of the next line), so the RR's handler runs first and VD is an IRQ of its own
+; (Power Tennis: RR on every line, the handler takes the RR path whenever RR is set).
+	TST.B	VdMid
+	BEQ.S	.noMid
+	SUB.W	#455-190,D0		; the cycles before VD (fewer after a block transfer)
+	BLS.S	.midNow
+	BSR	CPU_Loop
+	IFEQ	NO_CLIDELAY
+.midCli:
+	MOVE.W	CliRest,D0
+	BEQ.S	.midNow
+	CLR.W	CliRest
+	BSR	CPU_Loop
+	BRA.S	.midCli
+	ENDC
+.midNow:
+	CLR.B	VdMid
+	BSR	VdcVblank
+	MOVE.W	#455-190,D0
+.noMid:
+	ENDC
 	BSR	CPU_Loop
 	IFEQ	NO_CLIDELAY
 .cliRest:
@@ -212,6 +251,13 @@ noVblankInt:
 	ENDC
 	IFEQ	NO_BLKTIME
 .blkLine:
+	IFEQ	NO_VDMID|NO_VDLATE|NO_VDCDMA
+	TST.B	VdMid			; the whole line went to a block transfer
+	BEQ.S	.noMid2
+	CLR.B	VdMid
+	BSR	VdcVblank
+.noMid2:
+	ENDC
 	ENDC
 	IFEQ	NO_TIMER
 	BSR	TimerLine
@@ -476,6 +522,9 @@ Instr:
 	CNOP	0,8
 
 SpriteCoor:	DS.B	(64*8)
+	IFEQ	NO_SATLAG
+SatShown:	DS.B	(64*8)		; SpriteCoor as the frame began (PCE_Start): what its picture shows
+	ENDC
 
 	CNOP	0,8
 

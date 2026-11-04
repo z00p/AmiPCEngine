@@ -1680,7 +1680,11 @@ RtgSprDec2:
 ; as RtgSprT entries (16 bytes): top, height, x, cells (1/2), pattern,
 ; line word ($100 + palette*16, bit 15 = over BG), flags (0 = X flip, 1 = Y flip).
 RtgSprList:
+	IFEQ	NO_SATLAG
+	LEA	SatShown,A0
+	ELSE
 	LEA	SpriteCoor,A0
+	ENDC
 	LEA	RtgSprT,A1
 	MOVEQ	#0,D7			; count
 	MOVEQ	#64-1,D6

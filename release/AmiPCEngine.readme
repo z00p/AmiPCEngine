@@ -26,6 +26,14 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
+New in 1.3
+----------
+More games run or look right: TaleSpin, Cyber Cross, Lode Runner: Lost
+Labyrinth, Momotarou Densetsu Gaiden and II, Power Tennis, Bikkuriman
+World, Benkei Gaiden and Dragon Egg!. Sprites keep in step with a
+scrolling background, and sounds change speaker less often. See
+CHANGES.txt.
+
 New in 1.2
 ----------
 Backup RAM saves: games that save (high scores, progress) keep them in a
@@ -65,7 +73,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 1.2 by z00p. Web and menu graphics: Multivac. Thanks to Zener
+1.0 to 1.3 by z00p. Web and menu graphics: Multivac. Thanks to Zener
 and Sandman.
 
 PC Engine is a trademark of NEC and Hudson Soft, TurboGrafx-16 of NEC.
