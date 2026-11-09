@@ -4,6 +4,23 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 1.4
+
+- Controls answer a frame sooner. Each emulated frame now starts at the
+  PC Engine's vertical blank, so the game reads the pad first and the
+  picture it draws is shown one frame (20 ms) earlier. Measured: the
+  first changed picture after a press came one frame sooner in R-Type,
+  Parodius Da! and Soldier Blade.
+- RTG screen: each frame starts as late as is safe and the pad is read
+  again just before it, a further 11 to 14 ms on an A1200 with a
+  PiStorm.
+- AGA screen: Parodius Da! no longer slows to about 17 frames a second
+  after a bell's screen flash; tiles a game rewrites unchanged are not
+  redrawn, which makes some games faster (Meteor Blaster DX, Gomola
+  Speed).
+- Sound: with the PAL screen setting, DDA samples keep time better, so
+  they are trimmed less often (a small timing error fixed).
+
 ## New in 1.3
 
 - More games run or look right: TaleSpin, Cyber Cross, Lode Runner:

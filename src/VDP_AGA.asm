@@ -870,6 +870,9 @@ PrintGFXchip:
 	MOVE.L	(TabGfx256.W,PC,D7.W*4),D7
 
 ;	ROR.W	#8,D0
+	IFEQ	NO_TILEWRAP
+	AND.W	#$07FF,D0		; tile: 32K words of VRAM, 2048 redraw flags
+	ENDC
 	LSL.W	#4,D0
 
 	LEA	(A4,D0.L*2),A2
@@ -1003,11 +1006,19 @@ PrintGFX:
 	subq.l	#1,D1
 .PrtGfxBuc0:
 	CMP.W	(A5)+,(A6)+
+	IFNE	DbgProbe
+	BNE.S	.pBat
+	ELSE
 	BNE.S	.PrtGfxRut
+	ENDC
 ;;	BRA.S	.PrtGfxRut	; force to re-draw all tiles
 
 	TST.B	([A7])
+	IFNE	DbgProbe
+	BNE.S	.pTil
+	ELSE
 	BNE.S	.PrtGfxRut
+	ENDC
 	ADDQ	#4,A7
 
 	ADDQ.W	#1,A0
@@ -1023,6 +1034,13 @@ PrintGFX:
 
 	move.l	PILA11,A7
 	RTS
+
+	IFNE	DbgProbe
+.pBat:	ADDQ.W	#1,PrbBat		; cell redrawn: its BAT word changed
+	BRA.S	.PrtGfxRut
+.pTil:	ADDQ.W	#1,PrbTil		; cell redrawn: its tile was written
+	BRA.S	.PrtGfxRut
+	ENDC
 
 	CNOP	0,8
 .PrtGfxRut:
@@ -1045,7 +1063,11 @@ PrintGFX:
 	AND.W	#$000F,D7
 	MOVE.L	(TabGfx256.W,PC,D7.W*4),D7
 
+	IFEQ	NO_TILEWRAP
+	AND.W	#$07FF,D0		; tile: 32K words of VRAM, 2048 redraw flags
+	ELSE
 	AND.W	#$0FFF,D0
+	ENDC
 	LSL.W	#4,D0
 
 	LEA	(A4,D0.L*2),A2
@@ -1783,6 +1805,21 @@ BgLogSwap:
 	MOVE.L	A1,BgLogIdx
 	MOVEM.L	(SP)+,D0-D2/A0-A1
 	RTS
+	IFEQ	NO_VBLUNIT|NO_VDCDMA
+; Line 0 inside an emulated frame (NO_VBLUNIT): the table being written starts
+; again with entry 0 = colour 0 now. All registers kept.
+BgLogTop:
+	MOVEM.L	D0-D2/A0-A1,-(SP)
+	MOVE.L	BgLogNow,A1
+	MOVE.W	#-1,(A1)
+	MOVE.W	VDP_Pal,D0
+	BSR	BgColRgb
+	MOVE.W	D0,2(A1)
+	ADDQ.L	#4,A1
+	MOVE.L	A1,BgLogIdx
+	MOVEM.L	(SP)+,D0-D2/A0-A1
+	RTS
+	ENDC
 	ENDC
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

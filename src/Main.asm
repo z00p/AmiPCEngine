@@ -18,6 +18,9 @@ ShowFps=0
 	IFND	DbgRows	; 1 = debug build: speed and section-time rows above the picture (DbgRows.asm)
 DbgRows=0
 	ENDC
+	IFND	DbgProbe	; 1 (with DbgRows, AGA): the top row shows why the background is redrawn
+DbgProbe=0
+	ENDC
 	IFND	ShowPerformance	; default, or set with -DShowPerformance=x
 ShowPerformance=0
 	ENDC
@@ -53,6 +56,9 @@ NO_CYC455=0
 	ENDC
 	IFND	AutoPress	; AutoExit test builds: replay the pad schedule in autopress.i
 AutoPress=0
+	ENDC
+	IFND	AutoPressHost	; with AutoPress: apply the schedule where the real pad is read (Amiga vblank), not at the PCE frame (lag tests)
+AutoPressHost=0
 	ENDC
 	IFND	AutoFreeze	; AutoExit test builds: hold the last frame instead of exiting
 AutoFreeze=0
@@ -265,6 +271,21 @@ NO_SPRBACK=0
 	IFND	NO_IOREAD	; I/O read-backs as Mesen's: $1000 bits 4-5, $0405 bits 1-7, $0001 = 0, $1402 = 0 at reset
 NO_IOREAD=0
 	ENDC
+	IFND	NO_VBLUNIT	; 1 = each emulated frame runs from line 0 to 262, so what a game does with a pad read in its vblank shows a frame later; 0 = from the PCE vblank line to the next, so the game reads the pad first and the frame it then draws is on the screen a frame sooner
+NO_VBLUNIT=0
+	ENDC
+	IFND	NO_LATESTART	; 1 = on RTG each frame is emulated straight after the vblank; 0 = it waits until just enough of the frame is left for the work (the slowest of the last 16 frames and a margin), reads the pad again and then emulates, so a press reaches the game up to most of a frame later than the vblank read
+NO_LATESTART=0
+	ENDC
+	IFND	NO_VRAMSAME	; 1 = every VRAM write marks its tile for redrawing; 0 = only a write that changes VRAM (Parodius after the bell's flash bomb rewrites the same 17 tiles every frame, and AGA redrew every cell using them: 17 fps)
+NO_VRAMSAME=0
+	ENDC
+	IFND	NO_DDAPER	; 1 = the timer-tick DDA period on a PAL screen is 610 (worked out from 227.5 colour clocks a line, NTSC's average: 0.36% long); 0 = 609 (PAL's 227: 313 x 227 / 116.9 = 607.8, 0.2% long as meant, so the queue trims less often)
+NO_DDAPER=0
+	ENDC
+	IFND	NO_TILEWRAP	; 1 = AGA takes a BAT tile number of $800 or more as it is; 0 = it wraps to the 32K words of VRAM as on RTG (Parodius after the bell's flash bomb fills 480 hidden cells with tiles $Exx-$Fxx: AGA read their redraw flags past the end of TabRedef, never cleared, and redrew them every frame: 17 fps)
+NO_TILEWRAP=0
+	ENDC
 	IFND	NO_SATLAG	; 1 = sprites drawn from the SAT the VDC copies at this frame's vblank (one frame early); 0 = from the SAT the frame was shown with, as the VDC (Power Tennis's net sprite over the scrolling net)
 NO_SATLAG=0
 	ENDC
@@ -327,6 +348,9 @@ NO_INDRD=0
 	ENDC
 	IFND	NO_TSTROM	; 1 = TST #imm,abs / abs,X reads the write page (a ROM slot's write sink, not the ROM); 0 = the read page (Momotarou Densetsu Gaiden / II: TST #$FF,$48AA,X on a ROM table picks the text font)
 NO_TSTROM=0
+	ENDC
+	IFND	NO_REL14	; 1 = 1.3 version texts
+NO_REL14=0
 	ENDC
 	IFND	NO_REL13	; 1 = 1.2 version texts
 NO_REL13=0
@@ -446,7 +470,11 @@ NF_Menu:
 	IFEQ	NO_REL11
 	IFEQ	NO_REL12
 	IFEQ	NO_REL13
+	IFEQ	NO_REL14
+	DC.B	"$VER:AmiPC-Engine Emulator v1.4 (9.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.3 (4.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.2 (3.11.26)",0,0
 	ENDC
@@ -534,6 +562,9 @@ RestartGame:
 	MOVE.L	ScrollChangesNow(A3),ScrollChangesIndex(A3)
 	move.w	#-1,ScrollChangesBufA
 	move.w	#-1,ScrollChangesBufB
+	IFEQ	NO_VBLUNIT|NO_VDCDMA
+	CLR.W	UnitStart		; a new game: its first frame starts at line 0
+	ENDC
 	IFEQ	NO_BGLINE|NO_BGMASK
 	JSR	BgLogInit
 	ENDC
@@ -632,6 +663,12 @@ BUC:
 	IFNE	DbgRows
 	JSR	DbgLapCopy
 	ENDC
+	IFEQ	NO_LATESTART
+	JSR	LateStart		; wait, then the pad again
+	IFNE	DbgRows
+	JSR	DbgLapDelay
+	ENDC
+	ENDC
 .noRtgCopy:
 	ENDC
 
@@ -667,11 +704,15 @@ BUC:
 	ENDC
 
 	IFNE	AutoPress
+	IFEQ	AutoPressHost
+	IFNE	NO_VBLUNIT|NO_VDCDMA	; (0: latched at the frame's line 0, in PCE_FrameTop)
 	MOVEM.L	D0-D4/A0,-(SP)
 	JSR	AutoPressBits		; pad bits for this frame, the same for the whole frame
 	MOVE.B	D1,AutoPressCur
 	MOVE.B	D1,Regs+JoyX
 	MOVEM.L	(SP)+,D0-D4/A0
+	ENDC
+	ENDC
 	ENDC
 	BSR	PCE_Start
 	IFEQ	NO_PSGWAVE
@@ -713,6 +754,9 @@ BUC:
 	ENDC
 	IFEQ	NO_WIDE
 	JSR	WideGeometry
+	ENDC
+	IFNE	DbgProbe
+	JSR	DbgProbeScan
 	ENDC
 	JSR	PrintGFX
 	JSR	CleanTabRefef
@@ -768,6 +812,13 @@ BUC:
 .rtgDrawn:
 	ENDC
 	MOVEM.L	(SP)+,D0-D7/A0-A6
+
+	IFEQ	NO_LATESTART|NO_RTG
+	TST.B	RtgOn
+	BEQ.S	.noLateEnd
+	JSR	LateEnd
+.noLateEnd:
+	ENDC
 
 	ADDQ.L	#1,FPS_Count
 
@@ -832,6 +883,94 @@ BUC:
 	JMP	Salir
 
 ; ----------------------------------
+
+	IFEQ	NO_LATESTART|NO_RTG
+; LateStart (RTG, after RtgCopy): wait until LsFrame - (LsBusy max + margin) lines
+; after the vblank, or the vblank itself, then read the pad again as the vblank
+; interrupt does. LateEnd (the frame's work done): LsBusy gets the lines since
+; the wait ended; a frame that ran into the next vblank stops the wait for
+; LsHoldN frames. Times in lines from the CIA-B TOD counter (HSYNC).
+LsHoldN = 50
+LateStart:
+	MOVEM.L	D0-D3/A0/A3,-(SP)
+	TST.W	LsHold
+	BEQ.S	.go
+	SUBQ.W	#1,LsHold
+	BRA.S	.read
+.go:	LEA	LsBusy,A0		; D2 = the slowest of the last 16 frames
+	MOVEQ	#0,D2
+	MOVEQ	#16-1,D1
+.mx:	CMP.W	(A0)+,D2
+	BCC.S	.mx1
+	MOVE.W	-2(A0),D2
+.mx1:	DBF	D1,.mx
+	CMP.W	#1000,D2		; (not known yet, or a frame stopped by the menu)
+	BHI.S	.read
+	MOVE.W	D2,D1			; margin: 24 lines + a quarter
+	LSR.W	#2,D1
+	ADD.W	#24,D1
+	ADD.W	D1,D2
+	MOVE.W	LsFrame,D3		; D3 = lines after the vblank to start at
+	SUB.W	D2,D3
+	BLE.S	.read
+.wt:	TST.B	vBlankOccurred
+	BNE.S	.read
+	BSR	LsTod
+	SUB.W	LsVblTod,D0
+	CMP.W	D3,D0
+	BLT.S	.wt
+.read:	MOVE.W	#$4000,$DFF09A		; the pad as the vblank interrupt reads it
+	MOVE.L	JoyControlRut,A0
+	JSR	(A0)
+	LEA	Regs,A3
+	MOVE.B	KeyX(A3),D1
+	OR.B	D1,JoyX(A3)
+	IFNE	AutoPress
+	MOVE.B	AutoPressCur,D1
+	OR.B	D1,JoyX(A3)
+	ENDC
+	MOVE.W	#$C000,$DFF09A
+	BSR	LsTod
+	MOVE.W	D0,LsStart
+	MOVEM.L	(SP)+,D0-D3/A0/A3
+	RTS
+
+LateEnd:
+	MOVEM.L	D0-D1/A0,-(SP)
+	BSR	LsTod
+	SUB.W	LsStart,D0
+	MOVE.W	LsBusyIx,D1
+	LEA	LsBusy,A0
+	MOVE.W	D0,(A0,D1.W*2)
+	ADDQ.W	#1,D1
+	AND.W	#15,D1
+	MOVE.W	D1,LsBusyIx
+	TST.B	vBlankOccurred		; ran into the next vblank: no wait for a while
+	BEQ.S	.ok
+	MOVE.W	#LsHoldN,LsHold
+.ok:	MOVEM.L	(SP)+,D0-D1/A0
+	RTS
+
+; LsTod: D0.W = CIA-B TOD bits 15-0 (the high byte is not read: it would latch).
+LsTod:
+	MOVE.L	D1,-(SP)
+.r:	MOVE.B	$BFD900,D1
+	MOVE.B	$BFD800,D0
+	CMP.B	$BFD900,D1
+	BNE.S	.r
+	LSL.W	#8,D1
+	MOVE.B	D0,D1
+	MOVE.W	D1,D0
+	MOVE.L	(SP)+,D1
+	RTS
+
+LsVblTod:	DC.W	0	; TOD at the last vblank interrupt
+LsFrame:	DC.W	0	; lines between the last two (0 until known: no wait)
+LsStart:	DC.W	0	; TOD when the frame's work started
+LsHold:		DC.W	LsHoldN	; frames left without the wait
+LsBusyIx:	DC.W	0
+LsBusy:		DCB.W	16,$7FFF	; lines of work of the last 16 frames (none known: no wait)
+	ENDC
 
 DrawAmigaLoad:
 	jsr	xLogInit
@@ -1764,7 +1903,7 @@ DdaStatFill:
 	MOVEM.L	(SP)+,D0-D2/A0-A1
 	RTS
 DdaStatTab:	DC.L	DdaStH2,DdaStHolds,DdaStH5,DdaStWords,DdaStH6,DdaStStarts,DdaStH7,DdaStLost
-	DC.L	DdaStH9,DdaStDrop,DdaStH10,DdaStQueued,DdaStH11,DdaStTick,0
+	DC.L	DdaStH9,DdaStDrop,DdaStH10,DdaStQueued,DdaStH11,DdaStTick,DdaStH12,DdaStTrim,0
 DdaStatTxt:	DC.B	"dda under=$"
 DdaStH1:	DC.B	"00000000 holds=$"
 DdaStH2:	DC.B	"00000000 qmin=$"
@@ -1776,7 +1915,8 @@ DdaStH7:	DC.B	"00000000 skip=$"
 DdaStH8:	DC.B	"00000000 drop=$"
 DdaStH9:	DC.B	"00000000 queued=$"
 DdaStH10:	DC.B	"00000000 tick=$"
-DdaStH11:	DC.B	"00000000",10
+DdaStH11:	DC.B	"00000000 trim=$"
+DdaStH12:	DC.B	"00000000",10
 DdaStatEnd:
 	EVEN
 	ENDC
@@ -2177,7 +2317,12 @@ Salir:
 
 	IFEQ	NO_RTG
 	BSR	DescongelaAMIGA
+	IFNE	DbgProbe
+	JSR	RtgPlayClose
+	JMP	PrbDumpWrite		; OS alive: the last two frames' VRAM to a file
+	ELSE
 	JMP	RtgPlayClose		; RTG: the play screen closed, RTS to the menu
+	ENDC
 	ENDC
 
 DescongelaAMIGA:
@@ -2536,6 +2681,10 @@ RtgVblPal:
 	MOVE.B	KeyX(A3),D1
 	OR.B	D1,JoyX(A3)
 	IFNE	AutoPress
+	IFNE	AutoPressHost
+	JSR	AutoPressBits		; the next unit's bits, sampled here as the real pad is
+	MOVE.B	D1,AutoPressCur
+	ENDC
 	MOVE.B	AutoPressCur,D1		; scheduled pad bits, latched at the start of the PCE frame
 	OR.B	D1,JoyX(A3)
 	ENDC
@@ -2544,6 +2693,18 @@ RtgVblPal:
 
 	IFNE	DbgRows
 	JSR	DbgVblOut
+	ENDC
+	IFEQ	NO_LATESTART|NO_RTG
+	JSR	LsTod
+	MOVE.W	D0,D1
+	SUB.W	LsVblTod,D1
+	MOVE.W	D0,LsVblTod
+	CMP.W	#200,D1			; a frame is 262 or 313 lines
+	BCS.S	LsVbl1
+	CMP.W	#330,D1
+	BHI.S	LsVbl1
+	MOVE.W	D1,LsFrame
+LsVbl1:
 	ENDC
 	ST	vBlankOccurred
 
@@ -4014,6 +4175,10 @@ PopRAM:	DS.B	32*1024
 	ENDC
 	IFNE	VdcLog
 VdcLogBuf:	DS.B	VDCLOGMAX*16
+	ENDC
+	IFNE	DbgProbe
+PrbSnapA:	DS.B	PrbSnapLen	; DbgProbeScan's snapshots (DbgRows.asm)
+PrbSnapB:	DS.B	PrbSnapLen
 	ENDC
 	IFNE	ScrDump
 ScrDumpBuf:	DS.B	1000*128

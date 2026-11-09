@@ -97,6 +97,12 @@ DbgLapCopy:
 	LEA	DbgCopy,A0
 	BRA.S	DbgLap
 	ENDC
+	IFEQ	NO_LATESTART|NO_RTG
+DbgLapDelay:
+	MOVE.L	A0,-(SP)
+	LEA	DbgDelay,A0
+	BRA.S	DbgLap
+	ENDC
 DbgLapOther:
 	MOVE.L	A0,-(SP)
 	LEA	DbgOther,A0
@@ -164,6 +170,7 @@ DbgFrame:
 	MOVE.W	D2,(A1)+
 	MOVE.W	DbgWorst,(A1)+
 	MOVE.W	DbgOther,(A1)+
+	MOVE.W	DbgDelay,(A1)+
 	IFNE	AutoExit
 	BSR	DbgAutoSum
 	ENDC
@@ -177,7 +184,7 @@ DbgFrame:
 	MOVEQ	#DbgColsR,D3		; RTG: drawn on the screen by RtgCopy
 	LEA	DbgOut+20,A0
 	LEA	DbgPanelR,A1
-	MOVEQ	#3,D1
+	MOVEQ	#4,D1			; TOTL WRST OTHR DLAY
 	BSR	DbgRow
 	LEA	DbgOut,A0
 	LEA	DbgPanelR+DbgColsR*DbgRowGap,A1
@@ -188,16 +195,141 @@ DbgFrame:
 .aga:
 	ENDC
 	MOVEQ	#DbgCols,D3
+	IFNE	DbgProbe
+	LEA	PrbOut,A0		; the last frame's PrbSums, and MWR/CR
+	LEA	PrbSums,A1
+	MOVEQ	#PrbSumsN-1,D1
+.po:	MOVE.W	(A1)+,(A0)+
+	DBF	D1,.po
+	MOVE.W	PrbChg,(A0)+
+	LEA	PrbOut,A0
+	LEA	DbgPanel,A1
+	MOVEQ	#8,D1
+	ELSE
 	LEA	DbgOut+20,A0
 	LEA	DbgPanel,A1
 	MOVEQ	#3,D1
+	ENDC
 	BSR	DbgRow
 	LEA	DbgOut,A0
 	LEA	DbgPanel+DbgCols*DbgRowGap,A1
 	MOVEQ	#8,D1
 	BSR	DbgRow
-.out:	MOVEM.L	(SP)+,D0-D3/A0-A3
+.out:
+	IFNE	DbgProbe
+	CLR.W	PrbBat			; counts are per PCE frame
+	CLR.W	PrbTil
+	CLR.W	PrbCpu
+	CLR.W	PrbDma
+	CLR.W	PrbChg
+	ENDC
+	MOVEM.L	(SP)+,D0-D3/A0-A3
 	RTS
+
+	IFNE	DbgProbe
+; DbgProbeScan: before PrintGFX, the tiles written since the last frame (TabRedef):
+; how many, the first and the last. Row 1 (AGA) then shows, for the frame before
+; the window ended: BAT  TIL  DIRT LO   HI   CPU  DMA  CHG
+;   BAT  cells redrawn because their BAT word changed
+;   TIL  cells redrawn because their tile was written
+;   DIRT tiles (16 VRAM words) written; LO, HI the first and last of them
+;   CPU  VRAM writes by the CPU (words, or high bytes); DMA words by VRAM DMA
+;   CHG  bytes of those CPU writes that changed VRAM
+DbgProbeScan:
+	MOVEM.L	D0-D2/A0-A1,-(SP)
+	LEA	TabRedef,A0
+	MOVEQ	#0,D0
+	MOVEQ	#0,D1
+	MOVE.W	#$FFFF,PrbLo
+	CLR.W	PrbHi
+	MOVE.W	#2048-1,D2
+.s:	TST.B	(A0)+
+	BEQ.S	.n
+	ADDQ.W	#1,D1
+	CMP.W	PrbLo,D0
+	BCC.S	.h
+	MOVE.W	D0,PrbLo
+.h:	MOVE.W	D0,PrbHi
+.n:	ADDQ.W	#1,D0
+	DBF	D2,.s
+	MOVE.W	D1,PrbDirt
+	MOVE.L	PrbSnapNew,A0		; snapshot what PrintGFX is given, into the older buffer
+	MOVE.L	PrbSnapOld,PrbSnapNew
+	MOVE.L	A0,PrbSnapOld
+	MOVE.L	PrbSnapNew,A0
+	LEA	VRAM,A1
+	MOVE.W	#65536/16-1,D2
+.v:	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+	DBF	D2,.v
+	LEA	TabRedef,A1
+	MOVE.W	#2048/4-1,D2
+.t:	MOVE.L	(A1)+,(A0)+
+	DBF	D2,.t
+	LEA	VDP_Regs,A1
+	MOVEQ	#64/4-1,D2
+.r:	MOVE.L	(A1)+,(A0)+
+	DBF	D2,.r
+	LEA	VDP_Pal,A1
+	MOVE.W	#1024/4-1,D2
+.p:	MOVE.L	(A1)+,(A0)+
+	DBF	D2,.p
+	MOVEM.L	(SP)+,D0-D2/A0-A1
+	RTS
+
+; PrbDumpWrite (Esc, OS alive): PROGDIR:pcevram.bin = the newest snapshot, then
+; the one before: each VRAM 64K, TabRedef 2K, VDC regs 64, palette 1K.
+PrbDumpWrite:
+	MOVEM.L	D0-D7/A0-A6,-(SP)
+	MOVE.L	$4.W,A6
+	LEA	PrbDosName,A1
+	MOVEQ	#0,D0
+	JSR	-$228(A6)		; OpenLibrary
+	TST.L	D0
+	BEQ.S	.x
+	MOVE.L	D0,A6
+	MOVE.L	#PrbDumpName,D1
+	MOVE.L	#1006,D2		; MODE_NEWFILE
+	JSR	-30(A6)			; Open
+	MOVE.L	D0,D4
+	BEQ.S	.cl
+	MOVE.L	D4,D1
+	MOVE.L	PrbSnapNew,D2
+	MOVE.L	#PrbSnapLen,D3
+	JSR	-48(A6)			; Write
+	MOVE.L	D4,D1
+	MOVE.L	PrbSnapOld,D2
+	MOVE.L	#PrbSnapLen,D3
+	JSR	-48(A6)			; Write
+	MOVE.L	D4,D1
+	JSR	-36(A6)			; Close
+.cl:	MOVE.L	A6,A1
+	MOVE.L	$4.W,A6
+	JSR	-$19E(A6)		; CloseLibrary
+.x:	MOVEM.L	(SP)+,D0-D7/A0-A6
+	RTS
+PrbDosName:	DC.B	"dos.library",0
+PrbDumpName:	DC.B	"PROGDIR:pcevram.bin",0
+	CNOP	0,4
+PrbSnapLen	= 65536+2048+64+1024
+PrbSnapNew:	DC.L	PrbSnapA
+PrbSnapOld:	DC.L	PrbSnapB
+
+	CNOP	0,2
+PrbSums:
+PrbBat:		DC.W	0
+PrbTil:		DC.W	0
+PrbDirt:	DC.W	0
+PrbLo:		DC.W	0
+PrbHi:		DC.W	0
+PrbCpu:		DC.W	0
+PrbDma:		DC.W	0
+PrbSumsN	= (*-PrbSums)/2
+PrbChg:		DC.W	0
+PrbOut:		DS.W	8
+	ENDC
 
 ; DbgRow: D1 values from (A0)+ as 4 hex digits each, 5 characters apart, at A1;
 ; D3 = bytes a panel line.
@@ -252,6 +384,7 @@ DbgLate:	DC.W	0
 DbgRtg:		DC.W	0
 DbgCopy:	DC.W	0
 DbgOther:	DC.W	0
+DbgDelay:	DC.W	0	; lines waited before the frame (LateStart, RTG)
 DbgSumsN	= (*-DbgSums)/2
 DbgWorst:	DC.W	0
 DbgLast:	DC.W	0
@@ -261,7 +394,7 @@ DbgVbl0:	DC.W	0
 	CNOP	0,4
 DbgPrevVb:	DC.L	0
 DbgWinVb:	DC.L	0
-DbgOut:		DS.W	13
+DbgOut:		DS.W	14
 
 	IFNE	AutoExit
 ; AutoExit + DbgRows: the windows' figures over the whole run, for AmiPCE.result (tools/a1200run.py).
@@ -269,7 +402,7 @@ DbgAutoSum:
 	MOVEM.L	D0-D1/A0-A1,-(SP)
 	LEA	DbgOut,A0
 	LEA	DbgAuto,A1
-	MOVEQ	#13-1,D1
+	MOVEQ	#14-1,D1
 .a:	MOVEQ	#0,D0
 	MOVE.W	(A0)+,D0
 	ADD.L	D0,(A1)+
@@ -310,7 +443,7 @@ DbgAutoFill:
 	ENDC
 	RTS
 
-DbgAuto:	DS.L	13		; DbgOut's figures
+DbgAuto:	DS.L	14		; DbgOut's figures
 	DC.L	0		; wmax
 	DC.L	$FFFF		; wmin
 	DC.L	$FFFF		; fmin
@@ -320,7 +453,7 @@ DbgAutoTxt:
 	DC.B	"frms=$00000000 vbls=$00000000 wait=$00000000 cpu_=$00000000 "
 	DC.B	"bg__=$00000000 spr_=$00000000 vbli=$00000000 late=$00000000 "
 	DC.B	"rtg_=$00000000 copy=$00000000 totl=$00000000 wrst=$00000000 "
-	DC.B	"othr=$00000000 wmax=$00000000 wmin=$00000000 fmin=$00000000 "
+	DC.B	"othr=$00000000 dlay=$00000000 wmax=$00000000 wmin=$00000000 fmin=$00000000 "
 	DC.B	"wins=$00000000 scan=$00000000",10
 DbgAutoTxtEnd:
 	CNOP	0,4

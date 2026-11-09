@@ -26,6 +26,14 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
+New in 1.4
+----------
+Controls answer a frame sooner: each emulated frame starts at the PC
+Engine's vertical blank, so a press shows on screen 20 ms earlier. On RTG
+the pad is read again just before a late frame start, a further 11 to 14
+ms on an A1200 with a PiStorm. Parodius Da! no longer slows down on AGA
+after a screen flash. See CHANGES.txt.
+
 New in 1.3
 ----------
 More games run or look right: TaleSpin, Cyber Cross, Lode Runner: Lost
@@ -73,7 +81,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 1.3 by z00p. Web and menu graphics: Multivac. Thanks to Zener
+1.0 to 1.4 by z00p. Web and menu graphics: Multivac. Thanks to Zener
 and Sandman.
 
 PC Engine is a trademark of NEC and Hudson Soft, TurboGrafx-16 of NEC.

@@ -209,7 +209,11 @@ PSGWrite:
 	BSR	PSGTickPut		; and by timer tick
 	ENDC
 	MULU.W	#264,D2
+	IFEQ	NO_VBLUNIT|NO_VDCDMA
+	ADD.W	UnitLine,D2		; the line of the emulated frame (it starts at the vblank line)
+	ELSE
 	ADD.W	ScanLine(A3),D2
+	ENDC
 	MOVE.B	D0,(PSGDdaLine.L,D2.L)
 	MOVE.L	(SP)+,D2
 	IFEQ	PSGLog
@@ -712,7 +716,11 @@ PSGDdaInit:
 	MOVE.L	#PSGAudInt,$70(A0)
 	MOVE.L	#-1,PSGVoiceDdaCh
 	IFEQ	DdaTickOff
+	IFEQ	NO_DDAPER
+	MOVE.W	#609,PSGTkPer		; PAL screen: 313 x 227 / 116.9 ticks = 607.8; 0.2% long
+	ELSE
 	MOVE.W	#610,PSGTkPer		; PAL screen: 313 x 227.5 / 116.9 ticks = 609.3
+	ENDC
 	ENDC
 	MOVE.W	#270,PSGDdaPer		; PAL screen: 264 x 270 = 71280, 262 x 270 = 70740 (frame 71051)
 	TST.B	DirPrefs+$0F
@@ -1317,6 +1325,9 @@ PSGTickFill:
 	CMP.W	#6,D4
 	BCS.S	.nt
 	SUBQ.W	#2,D4			; 3 or more waiting with this one: 2 samples less
+	IFNE	DdaStat
+	ADDQ.L	#1,DdaStTrim
+	ENDC
 .nt:	LSR.W	#1,D4
 	MOVE.W	D4,(PSGRingLen.L,D5.W*2)
 	MOVEQ	#0,D1
@@ -1521,6 +1532,7 @@ DdaStLost:	DC.L	0
 DdaStDrop:	DC.L	0
 DdaStQueued:	DC.L	0
 DdaStTick:	DC.L	0
+DdaStTrim:	DC.L	0		; buffers trimmed by 2 samples (queue of 3 or more)
 DdaStQMin:	DC.B	$FF
 DdaStQMax:	DC.B	0
 	EVEN

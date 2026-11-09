@@ -256,7 +256,7 @@ Known faults
          six sound channels, DDA samples, every sprite palette on an
          RTG screen, and full speed on an A1200 with a PiStorm.
          Version 1.0 came out on 31 October, 1.1 on 2 November,
-         1.2 on 3 November and 1.3 on 4 November.
+         1.2 on 3 November, 1.3 on 4 November and 1.4 on 9 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -270,7 +270,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 1.3    z00p
+  Versions 1.0 to 1.4    z00p
   Web and menu graphics  Multivac
   With thanks to         Zener and Sandman
   Built with             Devpac III (HiSoft) and GadToolsBox (Jaba
@@ -285,7 +285,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 1.3, by z00p, are community updates
+Entertainment). Versions 1.0 to 1.4, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

@@ -46,7 +46,66 @@ PCE_SetCardtridge:
 	RTS
 
 
+	IFEQ	NO_VBLUNIT|NO_VDCDMA
+; PCE_FrameTop: line 0 of a PCE frame, in the middle of an emulated frame that
+; began at the last vblank line. What the vblank lines wrote before this is the
+; state the frame starts with, so the line logs start again here. D0/D1 kept.
+PCE_FrameTop:
+	IFEQ	NO_SATLAG
+	MOVEM.L	D2/A0/A1,-(SP)		; the SAT this frame shows: the one DMA'd at the last vblank
+	LEA	SpriteCoor,A0
+	LEA	SatShown,A1
+	MOVEQ	#(64*8)/16-1,D2
+.sat:	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	DBF	D2,.sat
+	MOVEM.L	(SP)+,D2/A0/A1
+	ENDC
+	clr.w	ScanLine(A3)
+	ST	UnitWrapped
+	MOVEM.L	D0-D4/A0,-(SP)
+	move.l	ScrollChangesNow(A3),a0
+	move.l	a0,ScrollChangesIndex(A3)
+	move.w	#-1,(a0)
+	IFEQ	NO_RTG
+	IFEQ	NO_RTGPAL
+	CLR.W	RtgPLN			; RtgFrame undoes only the colour writes after line 0
+	ENDC
+	MOVE.B	VDP_Regs+(5*2)+1,RtgCRStart
+	CLR.W	RtgCRN
+	ENDC
+	IFEQ	NO_BGLINE|NO_BGMASK
+	JSR	BgLogTop
+	ENDC
+	IFNE	AutoPress
+	IFEQ	AutoPressHost
+	JSR	AutoPressBits		; pad bits for this PCE frame
+	MOVE.B	D1,AutoPressCur
+	MOVE.B	D1,JoyX(A3)
+	ENDC
+	ENDC
+	MOVEQ	#0,D1			; (not 7: a full entry)
+	bsr	logScrollXY
+	MOVEM.L	(SP)+,D0-D4/A0
+	RTS
+UnitStart:	DC.W	0		; first line of the next emulated frame
+UnitLine:	DC.W	0		; lines run in this one (DDA samples by line)
+UnitWrapped:	DC.B	0		; line 0 passed in this one
+	EVEN
+	ENDC
+
 PCE_Start:
+	IFEQ	NO_VBLUNIT|NO_VDCDMA
+	MOVE.W	UnitStart,D0		; on from the line after the last frame's (the PCE vblank line)
+	MOVE.L	#263+64-1,D1		; at most: the frame ends at the vblank line after line 0
+	SF	UnitWrapped
+	CLR.W	UnitLine
+	TST.W	D0
+	BNE.S	PCE_StaBuc
+	BSR	PCE_FrameTop
+	ELSE
 
 	MOVEQ.L	#0,D0
 	MOVE.L	#263-1,D1	; Total number of vertical scan-lines (0 to 223 = Screen, 224 to end = border)
@@ -66,7 +125,15 @@ PCE_Start:
 	clr.w	ScanLine(A3)
 	bsr	logScrollXY
 
+	ENDC
 PCE_StaBuc:
+	IFEQ	NO_VBLUNIT|NO_VDCDMA
+	CMP.W	#263,D0
+	BCS.S	.vuIn
+	MOVEQ	#0,D0
+	BSR	PCE_FrameTop		; line 0 of the next PCE frame
+.vuIn:
+	ENDC
 	MOVEM.W	D0/D1,-(SP)
 
 	move.w	d0,ScanLine(A3)
@@ -265,10 +332,20 @@ noVblankInt:
 
 
 	MOVEM.W	(SP)+,D0/D1
-
 	ADDQ.W	#1,D0
-
+	IFEQ	NO_VBLUNIT|NO_VDCDMA
+	CMP.W	#262,UnitLine		; (a longer one, VDW changed: its last lines share slot 262)
+	BCC.S	.vuCap
+	ADDQ.W	#1,UnitLine
+.vuCap:	TST.B	UnitWrapped
+	BEQ.S	.vuGo
+	CMP.W	VblLine,D0		; the vblank line: the next frame starts here
+	BCC.S	.vuEnd
+.vuGo:	DBF	D1,PCE_StaBuc
+.vuEnd:	MOVE.W	D0,UnitStart
+	ELSE
 	DBF	D1,PCE_StaBuc
+	ENDC
 
 
 

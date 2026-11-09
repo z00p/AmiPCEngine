@@ -21,6 +21,10 @@ NO_RTGMENU=0
 	IFND	ScanCost	; RTGSHOT test builds: CIA-B TOD lines spent in RtgCopy, calls, lines copied -> rtgstat.txt
 ScanCost=0
 	ENDC
+	IFND	RtgSumFrom	; with RTGSHOT: a sum of each composed frame from this PCE frame on -> rtgsum.bin (lag tests)
+RtgSumFrom=0
+	ENDC
+RTGSUMN	= 64		; frames summed
 	IFND	RtgShotA	; with RTGSHOT: also keep the composed frame of these PCE frames
 RtgShotA=0
 	ENDC
@@ -2528,6 +2532,28 @@ RtgDbgPanel:
 ; "RTGS", width, height (words), P96 format (long), modes seen, screen width,
 ; height, scale (words); rtgshotX.raw: width, height (words), then pixels.
 RtgShotKeep:
+	IFNE	RtgSumFrom
+	MOVE.L	AutoFrames,D0
+	ADDQ.L	#1,D0
+	SUB.L	#RtgSumFrom,D0		; slot in the sum table
+	BMI.S	.nosum
+	CMP.L	#RTGSUMN,D0
+	BCC.S	.nosum
+	RtgBuf	RtgComp,A2
+	MOVEQ	#0,D4
+	MOVE.W	#RTGLINES-1,D2
+.sl:	MOVE.L	A2,A3
+	MOVE.W	RtgW,D3
+	SUBQ.W	#1,D3
+.sp:	ROL.L	#1,D4
+	ADD.L	(A3)+,D4
+	DBF	D3,.sp
+	ADD.L	#RTGMW*4,A2
+	DBF	D2,.sl
+	LEA	RtgSumTab,A0
+	MOVE.L	D4,(A0,D0.L*4)
+.nosum:
+	ENDC
 	MOVE.L	AutoFrames,D0
 	ADDQ.L	#1,D0			; this frame's number (as Mesen's)
 	LEA	RtgShotFr(PC),A0
@@ -2640,6 +2666,12 @@ RtgShotW2:
 	ADDQ.B	#1,D6
 	CMP.B	#68,D6			; D
 	BNE.S	.k
+	IFNE	RtgSumFrom
+	LEA	RtgSumNom(PC),A0
+	LEA	RtgSumTab,A1
+	MOVE.L	#RTGSUMN*4,D7
+	BSR	RtgSave
+	ENDC
 RtgShotX:
 	RTS
 
@@ -2727,6 +2759,7 @@ RtgShotNom:	DC.B	"PROGDIR:rtgshot.raw",0
 RtgShotNom2:	DC.B	"PROGDIR:rtgshot0.raw",0
 RtgShotNomK:	DC.B	"PROGDIR:rtgshot"
 RtgShotNomL:	DC.B	"A.raw",0
+RtgSumNom:	DC.B	"PROGDIR:rtgsum.bin",0
 	ENDC
 	EVEN
 
@@ -2875,4 +2908,5 @@ RtgStatTxt:	DS.B	128
 RtgShotHdr:	DS.B	20
 RtgShotBig:	DS.W	1920*1080
 RtgShotBuf:	DS.B	3*(4+RTGMW*RTGLINES*2)
+RtgSumTab:	DS.L	RTGSUMN
 	ENDC

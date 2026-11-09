@@ -784,11 +784,23 @@ writeVDP_02:
 
 	MOVE.W	VDP_Regs+(2*2),D0
 ;	ROR.W	#8,D0
+	IFNE	DbgProbe
+	ADDQ.W	#1,PrbCpu
+	CMP.W	(VRAM,D1.W*2),D0
+	BEQ.S	.prw
+	ADDQ.W	#2,PrbChg
+.prw:
+	ENDC
+	IFEQ	NO_VRAMSAME
+	CMP.W	(VRAM,D1.W*2),D0	; the same value: the tile need not be drawn again
+	BEQ.S	.vsame
+	ENDC
 	MOVE.W	D0,(VRAM,D1.W*2)
 
 	MOVE.W	D1,D0
 	LSR.W	#4,D0
 	ST	(TabRedef,D0.W)
+.vsame:
 
 	MOVE.B	(VDP_Regs+(5*2)),D0
 	LSR.B	#3,D0
@@ -1191,21 +1203,47 @@ Escr0003:
 EscribeVRAM2:
 	MOVE.W	VDP_Regs,D1
 	AND.W	#$7FFF,D1
+	IFNE	DbgProbe
+	MOVE.B	(A4),D0
+	CMP.B	(VRAM+1,D1.W*2),D0
+	BEQ.S	.prl
+	ADDQ.W	#1,PrbChg
+.prl:
+	ENDC
+	IFEQ	NO_VRAMSAME
+	MOVE.B	(A4),D0
+	CMP.B	(VRAM+1,D1.W*2),D0	; the same value: the tile need not be drawn again
+	BEQ.S	.vsame
+	ENDC
 	MOVE.B	(A4),(VRAM+1,D1.W*2)
 
 	LSR.W	#4,D1
 	ST	(TabRedef,D1.W)
-
+.vsame:
 	RTS
 
 EscribeVRAM3:
 	MOVE.W	VDP_Regs,D1
 	AND.W	#$7FFF,D1
+	IFNE	DbgProbe
+	ADDQ.W	#1,PrbCpu
+	MOVE.B	(A4),D0
+	CMP.B	(VRAM,D1.W*2),D0
+	BEQ.S	.prh
+	ADDQ.W	#1,PrbChg
+.prh:
+	ENDC
+	IFEQ	NO_VRAMSAME
+	MOVE.B	(A4),D0
+	CMP.B	(VRAM,D1.W*2),D0	; the same value: the tile need not be drawn again
+	BEQ.S	.vsame
+	ENDC
 	MOVE.B	(A4),(VRAM,D1.W*2)
 
 	MOVE.W	D1,D0
 	LSR.W	#4,D0
 	ST	(TabRedef,D0.W)
+.vsame:
 
 	MOVE.B	(VDP_Regs+(5*2)),D0
 	LSR.B	#3,D0
@@ -1295,6 +1333,9 @@ VdmaRun:
 	LSR.W	#4,D1
 	ST	(TabRedef,D1.W)
 	MOVE.W	(SP)+,D1
+	IFNE	DbgProbe
+	ADDQ.W	#1,PrbDma
+	ENDC
 .nx:	ADD.W	D3,D0
 	ADD.W	D4,D1
 	DBF	D2,.lp
