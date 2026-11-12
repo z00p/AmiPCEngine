@@ -2,17 +2,19 @@
 
 Usage:
   python tools/make_release.py BINARY [OUTDIR] [--version 1.0] [--draft]
-         [--debug BINARY_DEBUG] [--rtg-copy]
-  python tools/make_release.py --build [--build-debug] [OUTDIR] [--version 1.0] ...
+         [--debug BINARY_DEBUG] [--rtg-copy] [--colour BINARY_COLOUR]
+         [--colour-debug BINARY_COLOUR_DEBUG]
+  python tools/make_release.py --build [--build-debug] [--build-colour] [OUTDIR] [--version 1.0] ...
 
-BINARY    the normal (menu) build made with `sh build.sh release`, for example
-          build/AmiPCEngine. A test build (`sh build.sh`, "test build" and the
+BINARY    the program, "AGA" in the drawer (2.0: the colour build, `sh build.sh
+          colour`, build/AmiPCEngine_Colour); the RTG icon starts it with the
+          ToolType RTG. A test build (`sh build.sh`, "test build" and the
           commit in the window title) or a build with test-switch file names in
           it is refused unless --draft. With --version, the binary's $VER string
           must carry the same version.
---build   run `sh build.sh release` first and stage build/AmiPCEngine (no BINARY).
---build-debug  also run `sh build.sh debug` and stage build/AmiPCEngine_Debug as
-          the Debug pair (as --debug).
+--build   run `sh build.sh colour` first and stage build/AmiPCEngine_Colour (no BINARY).
+--build-debug  also run `sh build.sh colourdebug` and stage it as the Debug pair
+          (as --debug). Debug builds are not in public releases.
 OUTDIR    default release/drawer (not in git). Result:
             OUTDIR/AmiPCEngine/           the drawer
             OUTDIR/AmiPCEngine.info       its icon
@@ -21,16 +23,19 @@ OUTDIR    default release/drawer (not in git). Result:
 --draft   allow the undecided-text markers (see MARKER) and an
           unset version. Without it the script stops at the first marker, so
           a draft text cannot get into the archive.
---debug   a second build made with -DDbgRows=1: adds "AmiPCEngine Debug" and
-          "AmiPCEngine RTG Debug" with their icons (the legend, Debug rows.txt,
-          is staged either way).
---rtg-copy  "AmiPCEngine RTG" becomes a second copy of the program with a
+--debug   a second build made with -DDbgRows=1: adds "AGA Debug" and
+          "RTG Debug" with their icons and the legend, Debug rows.txt (for
+          builds on request; public releases have no Debug builds).
+--colour  a further program "AGA Colour" (not used since 2.0, where the
+          colour build is the BINARY). --colour-debug adds "AGA Colour Debug".
+--build-colour  run `sh build.sh colour` (and `colourdebug` with --build-debug)
+          and stage them as --colour / --colour-debug.
+--rtg-copy  "RTG" becomes a second copy of the program with a
           tool icon and the ToolType RTG instead of a project icon whose
-          default tool is
-          AmiPCEngine. Costs one more binary in the archive.
+          default tool is AGA. Costs one more binary in the archive.
 
-What goes in the drawer: the program, the AGA icon, the RTG icon, ReadMe.txt,
-CHANGES.txt, Debug rows.txt, and the empty Homebrew drawer (the program's
+What goes in the drawer (2.0): the program "AGA", its icon, the RTG icon, ReadMe.txt,
+CHANGES.txt, and the empty Homebrew drawer (the program's
 Insert requester opens PROGDIR:Homebrew) with a short note in it, and the Saves
 drawer for backup RAM, with a note too. NO ROMs: the
 script fails if anything that looks like a HuCard or disc image is staged.
@@ -46,7 +51,12 @@ import os, re, shutil, struct, sys, textwrap
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ICONS = os.path.join(BASE, "release", "icons")
 ROM_EXT = {".pce", ".sgx", ".hes", ".bin", ".iso", ".cue", ".rom", ".img", ".zip", ".lha", ".lzx"}
-PROGRAMS = {"AmiPCEngine", "AmiPCEngine RTG", "AmiPCEngine Debug", "AmiPCEngine RTG Debug"}
+# Names in the drawer (2.0): short, the drawer says AmiPCEngine. FFS allows
+# 30 characters with ".info", so no "AmiPCEngine " prefix on the Debug names.
+FAST, FAST_DBG = "AGA", "AGA Debug"
+COLOUR, COLOUR_DBG = "AGA Colour", "AGA Colour Debug"
+RTG, RTG_DBG = "RTG", "RTG Debug"
+PROGRAMS = {FAST, FAST_DBG, COLOUR, COLOUR_DBG, RTG, RTG_DBG}
 MARKER = re.compile(r"\[(John to decide|check after|end of check|OPTION)")
 HOMEBREW_NOTE = ("Put your HuCard files (.pce) here, or browse to them anywhere else.\n"
                  "AmiPCEngine's Insert requester opens this drawer.\n")
@@ -239,7 +249,9 @@ def build(mode):
     r = subprocess.run(["sh", "build.sh", mode], cwd=BASE)
     if r.returncode:
         sys.exit("sh build.sh %s failed" % mode)
-    return os.path.join(BASE, "build", "AmiPCEngine" if mode == "release" else "AmiPCEngine_Debug")
+    return os.path.join(BASE, "build", {"release": "AmiPCEngine", "debug": "AmiPCEngine_Debug",
+                                        "colour": "AmiPCEngine_Colour",
+                                        "colourdebug": "AmiPCEngine_ColourDebug"}[mode])
 
 
 def check_no_roms(out):
@@ -254,10 +266,10 @@ def check_no_roms(out):
                 sys.exit("unexpected large file staged: %s (%d bytes)" % (p, os.path.getsize(p)))
 
 
-def stage(binary, out, version, draft, debug=None, rtg_copy=False):
-    check_binary(binary, version, draft)
-    if debug:
-        check_binary(debug, version, draft)
+def stage(binary, out, version, draft, debug=None, rtg_copy=False, colour=None, colour_debug=None):
+    for b in (binary, debug, colour, colour_debug):
+        if b:
+            check_binary(b, version, draft)
     if os.path.exists(out):
         shutil.rmtree(out)
     d = os.path.join(out, "AmiPCEngine")
@@ -267,21 +279,26 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False):
     def put(name, data):
         open(os.path.join(d, name), "wb").write(data)
 
-    shutil.copy(binary, os.path.join(d, "AmiPCEngine"))
-    put("AmiPCEngine.info", tpl)                                       # AGA: the template as it is
-    variants = [("AmiPCEngine RTG", "AmiPCEngine", binary)]
+    shutil.copy(binary, os.path.join(d, FAST))
+    put(FAST + ".info", tpl)                                           # AGA: the template as it is
+    variants = [(RTG, FAST, binary)]
     if debug:
-        shutil.copy(debug, os.path.join(d, "AmiPCEngine Debug"))
-        put("AmiPCEngine Debug.info", tpl)
-        variants.append(("AmiPCEngine RTG Debug", "AmiPCEngine Debug", debug))
+        shutil.copy(debug, os.path.join(d, FAST_DBG))
+        put(FAST_DBG + ".info", tpl)
+        variants.append((RTG_DBG, FAST_DBG, debug))
     for name, tool, prog in variants:
         if rtg_copy:                                                   # a second binary, a tool icon
             shutil.copy(prog, os.path.join(d, name))
             put(name + ".info", tool_icon_with(tpl, ["RTG"]))
         else:                                                          # a project icon for the program
             put(name + ".info", tool_icon_with(tpl, ["RTG"], default_tool=tool))
+    for name, prog in ((COLOUR, colour), (COLOUR_DBG, colour_debug)):
+        if prog:                                                       # the AGA colour program
+            shutil.copy(prog, os.path.join(d, name))
+            put(name + ".info", tpl)
     amiga_text(os.path.join(BASE, "docs", "package", "ReadMe.txt"), os.path.join(d, "ReadMe.txt"), version, draft)
-    amiga_text(os.path.join(BASE, "docs", "package", "Debug rows.txt"), os.path.join(d, "Debug rows.txt"), version, draft)
+    if debug or colour_debug:                                          # the legend only with Debug builds
+        amiga_text(os.path.join(BASE, "docs", "package", "Debug rows.txt"), os.path.join(d, "Debug rows.txt"), version, draft)
     amiga_text(os.path.join(BASE, "CHANGES.md"), os.path.join(d, "CHANGES.txt"), version, draft, wrap=76)
     amiga_text(os.path.join(BASE, "release", "AmiPCEngine.readme"), os.path.join(out, "AmiPCEngine.readme"), version, draft)
     open(os.path.join(d, "Homebrew", "Put HuCards here.txt"), "wb").write(HOMEBREW_NOTE.encode("ascii"))
@@ -304,8 +321,9 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False):
 
 def main():
     a = sys.argv[1:]
-    opts = {"--version": None, "--debug": None}
-    flags = {"--draft": False, "--rtg-copy": False, "--build": False, "--build-debug": False}
+    opts = {"--version": None, "--debug": None, "--colour": None, "--colour-debug": None}
+    flags = {"--draft": False, "--rtg-copy": False, "--build": False, "--build-debug": False,
+             "--build-colour": False}
     pos = []
     i = 0
     while i < len(a):
@@ -319,13 +337,18 @@ def main():
             pos.append(a[i])
             i += 1
     if flags["--build"] or flags["--build-debug"]:
-        pos.insert(0, build("release"))
+        pos.insert(0, build("colour"))                 # 2.0: the AGA program is the colour build
         if flags["--build-debug"]:
-            opts["--debug"] = build("debug")
+            opts["--debug"] = build("colourdebug")
+    if flags["--build-colour"]:
+        opts["--colour"] = build("colour")
+        if flags["--build-debug"]:
+            opts["--colour-debug"] = build("colourdebug")
     if not pos or len(pos) > 2:
         sys.exit(__doc__)
     out = pos[1] if len(pos) > 1 else os.path.join(BASE, "release", "drawer")
-    stage(pos[0], out, opts["--version"], flags["--draft"], opts["--debug"], flags["--rtg-copy"])
+    stage(pos[0], out, opts["--version"], flags["--draft"], opts["--debug"], flags["--rtg-copy"],
+          opts["--colour"], opts["--colour-debug"])
 
 
 if __name__ == "__main__":

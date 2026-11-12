@@ -97,8 +97,18 @@ RtgStart:
 	BSR	RtgToolType
 	BRA.S	.want
 .cli:	BSR	RtgCliArg
-.want:	TST.B	RtgWant
+.want:
+	IFEQ	DispOff
+	IFEQ	AGC			; (the colour program: RTG only from the RTG word)
+	TST.B	DirPrefs+$17		; Display = RTG in the saved prefs (LoadPrefs ran before this)
+	BEQ.S	.wp
+	ST	RtgWant
+	ENDC
+.wp:				; P96 is looked for even when RTG is not wanted now: the menu may pick it
+	ELSE
+	TST.B	RtgWant
 	BEQ	.x
+	ENDC
 	MOVE.B	#2,RtgStage
 	MOVE.L	4.W,A6
 	LEA	RtgGfxNom(PC),A1
@@ -124,6 +134,13 @@ RtgStart:
 	BEQ	.no
 	MOVE.W	D1,RtgNModes
 	MOVE.B	#4,RtgStage
+	IFEQ	DispOff
+	ST	RtgAvail		; P96 and a play mode: the menu's Display gadget offers RTG
+	TST.B	RtgWant
+	BEQ	.x			; not wanted now: no buffers yet, the menu on AGA
+	BSR	RtgBigGet
+	BEQ	.no			; no memory: no RTG, as without P96
+	ELSE
 	IFEQ	NO_RTGFIX
 	MOVE.L	4.W,A6			; the big buffers, only now that RTG is wanted
 	MOVE.L	#RTGBIGSZ,D0
@@ -141,6 +158,7 @@ RtgStart:
 	IFEQ	ScanOff
 	ADD.L	#RTGSCSZ,D0
 	MOVE.L	D0,RtgScanTP
+	ENDC
 	ENDC
 	ENDC
 	IFEQ	NO_RTGMENU
@@ -195,6 +213,15 @@ RtgQuit:
 	MOVE.L	#RTGBIGSZ,D0
 	JSR	-210(A6)		; FreeMem
 .nb:
+	ENDC
+	IFNE	AGC
+	MOVE.L	AgcShad,D0		; the AGA chunky mode's shadow pictures
+	BEQ.S	.ns
+	CLR.L	AgcShad
+	MOVE.L	D0,A1
+	MOVE.L	#AGCSHSZ,D0
+	JSR	-210(A6)		; FreeMem
+.ns:
 	ENDC
 	LEA	RtgDos,A0
 	MOVEQ	#4-1,D1
@@ -771,8 +798,17 @@ RtgMenuScreen:
 ; graphics card's output). RTG is then off for this session. D0 = 0: go on.
 RtgMenuPlay:
 	MOVEQ	#0,D0
+	IFEQ	DispOff
+	TST.B	RtgWant
+	BNE.S	.w
+	TST.B	RtgMenuOn
+	BEQ.S	.x
+	BRA	RtgCurtain		; AGA play with the menu on RTG: a native screen in front first
+.w:
+	ELSE
 	TST.B	RtgWant
 	BEQ.S	.x
+	ENDC
 	BSR	RtgPlayOpen
 	TST.B	RtgOn
 	BNE.S	.x
@@ -781,6 +817,93 @@ RtgMenuPlay:
 	SF	RtgWant
 	MOVEQ	#1,D0
 .x:	RTS
+
+	IFEQ	DispOff
+; RtgBigGet: the big buffers, once (an AGC build may have them already). D0 = 0 (Z set): no memory.
+RtgBigGet:
+	MOVEM.L	D1/A0-A1/A6,-(SP)
+	MOVE.L	RtgBig,D0
+	BNE.S	.x
+	MOVE.L	4.W,A6
+	MOVE.L	#RTGBIGSZ,D0
+	MOVE.L	#$10000,D1		; MEMF_CLEAR (any memory: fast RAM when there is any)
+	JSR	-198(A6)		; AllocMem
+	MOVE.L	D0,RtgBig
+	BEQ.S	.x
+	MOVE.L	D0,RtgCompP
+	ADD.L	#RTGCOMPSZ,D0
+	MOVE.L	D0,RtgOldP
+	ADD.L	#RTGOLDSZ,D0
+	MOVE.L	D0,RtgTCacheP
+	ADD.L	#RTGTCSZ,D0
+	MOVE.L	D0,RtgSCacheP
+	IFEQ	ScanOff
+	ADD.L	#RTGSCSZ,D0
+	MOVE.L	D0,RtgScanTP
+	ENDC
+	MOVE.L	RtgBig,D0
+.x:	MOVEM.L	(SP)+,D1/A0-A1/A6
+	TST.L	D0
+	RTS
+
+; RtgSelect: the menu's Display gadget. D0 = 0 AGA, 1 RTG for the next Power ON / Continue;
+; returns D0 = what is in effect (AGA when RTG is not there or there is no memory for it).
+RtgSelect:
+	TST.L	D0
+	BEQ.S	.aga
+	TST.B	RtgAvail
+	BEQ.S	.aga
+	BSR	RtgBigGet
+	BEQ.S	.aga
+	ST	RtgWant
+	MOVEQ	#1,D0
+	RTS
+.aga:	SF	RtgWant
+	MOVEQ	#0,D0
+	RTS
+
+; RtgCurtain: AGA play with the menu on RTG: a blank native screen in front, so a board that
+; passes the native picture through shows it. D0 = 0. RtgCurtainOff (back in the menu) closes it.
+RtgCurtain:
+	MOVEM.L	D1/A0-A1/A6,-(SP)
+	SUB.L	A0,A0
+	LEA	RtgCurTags(PC),A1
+	MOVE.L	RtgInt,A6
+	JSR	-612(A6)		; OpenScreenTagList
+	MOVE.L	D0,RtgCurScr
+	BEQ.S	.x
+	MOVE.L	RtgGfx,A6
+	JSR	-270(A6)		; WaitTOF
+	JSR	-270(A6)
+.x:	MOVEQ	#0,D1			; the screen set BEAMCON0 to its own mode: the menu's Screen setting again
+	TST.B	DirPrefs+$0F
+	BNE.S	.n
+	MOVE.W	#$20,D1
+.n:	MOVE.W	D1,$DFF1DC
+	MOVEM.L	(SP)+,D1/A0-A1/A6
+	MOVEQ	#0,D0
+	RTS
+RtgCurtainOff:
+	MOVE.L	RtgCurScr,D0
+	BEQ.S	.x
+	CLR.L	RtgCurScr
+	MOVEM.L	D1/A0-A1/A6,-(SP)
+	MOVE.L	D0,A0
+	MOVE.L	RtgInt,A6
+	JSR	-66(A6)			; CloseScreen
+	MOVEM.L	(SP)+,D1/A0-A1/A6
+.x:	RTS
+	CNOP	0,4
+RtgCurTags:
+	DC.L	$80000025,1		; SA_Depth
+	DC.L	$80000032,0		; SA_DisplayID: the default native mode
+	DC.L	$80000038,1		; SA_Quiet
+	DC.L	$8000002D,$000F		; SA_Type: CUSTOMSCREEN
+	DC.L	0
+RtgCurScr:	DC.L	0
+RtgAvail:	DC.B	0		; P96 and a play mode found at start (RTG can be picked in the menu)
+	EVEN
+	ENDC
 
 tErRtgScr:	DC.B	"Can't open the RTG screen!",0
 	EVEN
@@ -884,8 +1007,17 @@ RtgPlayClose:
 	TST.B	RtgOn
 	BEQ.S	.x
 	SF	RtgOn
+	IFNE	AGC
+	SF	AgcOn
+	ENDC
 	IFNE	RTGSHOT
 	BSR	RtgShotWrite
+	ENDC
+	IFNE	RtgExitHold		; test builds: the AGA display as it is before the menu, for a grab
+	BSR	RtgCloseScr
+	MOVE.L	RtgDos,A6
+	MOVE.L	#RtgExitHold,D1
+	JSR	-198(A6)		; Delay
 	ENDC
 .x:
 	IFNE	RTGSHOT
@@ -910,8 +1042,18 @@ RtgCloseScr:
 RtgTakeover:
 	TST.B	RtgOn
 	BEQ.S	.x
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.r
+	JMP	AgcTakeover
+.r:
+	ENDC
 	MOVE.W	#$01A0,$DFF096		; BPLEN, COPEN, SPREN off
 	MOVE.W	#$0000,$DFF180
+	IFEQ	RtgBlankOff
+	MOVE.W	#$0200,$DFF100		; BPLCON0: no bitplanes. On Esc the OS copper list comes back without
+					; them until the menu screen is up: the old frame flashed on the AGA side
+	ENDC
 .x:	RTS
 
 ; A new run (Power ON or Continue): the caches know nothing, every line is new.
@@ -1227,6 +1369,12 @@ RtgFrame:
 	MOVE.L	VDP_Regs+(7*2),2(A0)
 	MOVE.W	#-1,6(A0)
 .sl:	MOVE.L	A0,RtgScrP
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.sk
+	JSR	AgcScrKey		; the main region's map row (AgcShift)
+.sk:
+	ENDC
 ; the lines
 	MOVEQ	#0,D7
 .line:	MOVE.W	D7,RtgY
@@ -1317,6 +1465,12 @@ RtgFrame:
 	ENDC
 	MOVE.B	VDP_Regs+(5*2)+1,RtgCRStart	; the next frame starts with this CR
 	CLR.W	RtgCRN
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.agx
+	JSR	AgcC2P
+.agx:
+	ENDC
 	IFNE	RTGSHOT
 	BSR	RtgShotKeep
 	ENDC
@@ -1435,7 +1589,14 @@ RtgOutLine:
 	MOVE.W	RtgHoff,D0
 	BEQ.S	.sh0
 	BSR	RtgShift
-.sh0:	MOVE.W	RtgY,D7
+.sh0:
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.r
+	JMP	AgcOutLine
+.r:
+	ENDC
+	MOVE.W	RtgY,D7
 	LEA	RtgLineB+32,A0
 	MOVEQ	#0,D0
 	MOVE.W	D7,D0
@@ -1955,6 +2116,12 @@ RtgSprSrc:
 ; start of an Amiga vertical blank (main loop). All registers kept.
 	CNOP	0,4
 RtgCopy:
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.r
+	RTS			; (AGA chunky mode: AgcFlip in the vertical blank interrupt)
+.r:
+	ENDC
 	MOVEM.L	D0-D7/A0-A6,-(SP)
 	IFNE	ScanCost
 	BSR	RtgCostTod
@@ -2402,11 +2569,18 @@ RtgScanMenu:
 	TST.B	RtgScanTT
 	BMI.S	.p
 	MOVE.B	RtgScanTT,DirPrefs+$15
-.p:	MOVE.W	#$0010,D0		; NM_ITEMDISABLED
+.p:
+	IFEQ	NO_MENU2
+	RTS				; the menu's Scanlines gadget shows the setting (PonPrefs)
+	ENDC
+	MOVE.W	#$0010,D0		; NM_ITEMDISABLED
 	TST.B	RtgWant
 	BEQ.S	.g
 	MOVEQ	#0,D0
-.g:	MOVE.W	D0,MainMenuNewMenuSI+10
+.g:
+	IFNE	NO_MENU2
+	MOVE.W	D0,MainMenuNewMenuSI+10
+	ENDC
 	BRA.S	RtgScanFlags
 
 ; Options > RTG scanlines: the setting for the next Power ON / Continue.
@@ -2437,11 +2611,16 @@ RtgScanSet:
 ; RtgScanFlags: CHECKED on the sub-item of the setting in the NewMenu table
 ; (menus made again later show it).
 RtgScanFlags:
+	IFEQ	NO_MENU2
+	RTS				; (no menu items: the Scanlines gadget)
+	ENDC
 	IFEQ	NO_BLENDLV
 	MOVEM.L	D0-D2/A0-A1,-(SP)
 	MOVEQ	#0,D1
 	MOVE.B	DirPrefs+$15,D1
+	IFNE	NO_MENU2
 	LEA	MainMenuNewMenuS0+10,A0
+	ENDC
 	LEA	RtgScanPos(PC),A1
 	MOVEQ	#7-1,D0
 .l:	MOVE.W	#$0001,(A0)		; CHECKIT
@@ -2461,7 +2640,9 @@ RtgScanLend:	DC.B	"lend",0
 	MOVEM.L	D0-D1/A0,-(SP)
 	MOVEQ	#0,D1
 	MOVE.B	DirPrefs+$15,D1
+	IFNE	NO_MENU2
 	LEA	MainMenuNewMenuS0+10,A0
+	ENDC
 	MOVEQ	#0,D0
 .l:	MOVE.W	#$0001,(A0)		; CHECKIT
 	CMP.W	D0,D1
@@ -2867,6 +3048,9 @@ RtgAnyD:	DC.B	0		; a line to copy
 RtgInitd:	DC.B	0
 RtgCR:		DC.B	0
 RtgCRStart:	DC.B	0
+	IFEQ	NO_CRVIS
+CrVis:		DC.B	$C0		; CR bits 6-7 seen in the shown lines of the last finished frame
+	ENDC
 	EVEN
 RtgCRN:		DC.W	0
 RtgCRP:		DC.L	0

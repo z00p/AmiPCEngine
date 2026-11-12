@@ -611,11 +611,20 @@ gem:
 ; Four 64-px strips (attached pairs 0/1 .. 6/7) at the columns in StripCol.
 ; A strip that moved is copied whole; otherwise only its dirty lines.
 	IFEQ	NO_SPRCOVER
+	IFNE	StripLog
+	bsr	StripLogOld
+	ENDC
 	bsr	PlaceStrips
+	IFNE	StripLog
+	bsr	StripLogNew
+	ENDC
 	ENDC
 	lea	Sprit0+1,A1		; HSTART bits 8-1 in the POS word
 	lea	StripCol,A2
 	lea	StripColOld,A3
+	IFEQ	NO_SPRRACE|NO_SPRCOVER
+	lea	$dff140,A6		; SPR0POS; strip k = sprites 2k, 2k+1
+	ENDC
 	moveq	#0,D6			; strips moved?
 	moveq	#4-1,D0
 .wpos:
@@ -640,6 +649,17 @@ gem:
 	lsr.w	#1,D1
 	move.b	D1,(A1)
 	move.b	D1,NextSpr/2(A1)
+	IFEQ	NO_SPRRACE|NO_SPRCOVER
+; A moved strip: its new position goes into SPRxPOS at once too. The sprite
+; DMA read the old control words at the top of the frame, so without this the
+; rest of the frame shows the new data at the old position (a ghost).
+	tst.w	6(A2)
+	beq.s	.wpos2
+	move.w	-1(A1),(A6)
+	move.w	NextSpr/2-1(A1),8(A6)
+.wpos2:
+	lea	16(A6),A6
+	ENDC
 	add.l	#NextSpr,A1
 	dbf	D0,.wpos
 	tst.w	D6
@@ -651,6 +671,59 @@ gem:
 	move.l	D1,(A1)+
 	dbf	D0,.wall
 .wcopy:
+	IFEQ	NO_SPRRACE|NO_SPRCOVER
+; Race the beam: the sprite data is single-buffered in chip RAM and is
+; written while the picture is on screen. Copy from just below the beam line
+; to the bottom first (faster than the beam moves, so those lines show the new
+; data this frame), then the lines above it (already shown; next frame).
+	move.l	$dff004,D1		; VPOSR/VHPOSR: V10-V8 in bits 18-16, V7-V0 in 15-8
+	lsr.l	#8,D1
+	and.w	#$7FF,D1
+	moveq	#0,D2
+	move.b	Sprit0,D2		; VSTART = sprite line 0
+	sub.w	D2,D1
+	bmi.s	.wr0			; above the sprites: from line 0
+	addq.w	#2,D1
+	cmp.w	#224,D1
+	bcs.s	.wr1
+.wr0:	moveq	#0,D1			; past them: from line 0 (shows next frame)
+.wr1:	move.w	D1,WRaceLine
+	move.w	#224,D0
+	sub.w	D1,D0
+	bsr	.wlines
+	moveq	#0,D1
+	move.w	WRaceLine,D0
+	bsr	.wlines
+	RTS
+; D1 = first sprite line, D0 = lines (may be 0)
+.wlines:
+	subq.w	#1,D0
+	bmi	.wl9
+	moveq	#0,D2
+	move.w	D1,D2
+	move.l	D2,D3
+	lsl.l	#6,D3
+	add.l	#(64*64),D3		; dirty bit of column 0 on this line
+	lea	SpriteDirtyArea1,A5
+	lea	Sprit0+16,A4
+	lsl.l	#4,D2
+	add.l	D2,A4			; 16 bytes a sprite line
+	lsr.l	#4,D2
+	mulu.w	#SprBufNextLine,D2
+	lea	SpriteBufer+(SprBufPivotXY),A0
+	add.l	D2,A0
+.wrl:
+	lea	StripCol,A2
+	WStrip
+	WStrip
+	WStrip
+	WStrip
+	sub.l	#(NextSpr*4)-16,A4
+	add.w	#SprBufNextLine,A0
+	add.l	#64,D3
+	dbf	D0,.wrl
+.wl9:	rts
+	ENDC
 	lea	SpriteBufer+(SprBufPivotXY),A0
 	lea	Sprit0+16,A4
 	lea	SpriteDirtyArea1,A5
@@ -1360,17 +1433,29 @@ StripCol:	DC.W	0,8,16,24	; sprite strip start columns (8 px) in the window
 StripForce:	DC.W	0,0,0,0		; must follow StripCol (WStrip)
 	ENDC
 StripColOld:	DC.W	-1,-1,-1,-1
+	IFEQ	NO_SPRRACE|NO_SPRCOVER
+WRaceLine:	DC.W	0	; first sprite line copied this frame (below the beam)
+	ENDC
 	IFEQ	NO_SPRCOVER
 ColOcc:		DS.B	16	; columns with sprite pixels this frame, bit 4 = window column 0
 ColNeed:	DS.B	16
 StripTmp:	DS.W	4
+	IFEQ	NO_SPRBEST
+StripTmpR:	DS.W	4
+StripTmpN:	DC.W	0
+StripLostL:	DC.W	0
+	ENDC
 
 ; Put the 4 strips (64 px = 8 columns each) where the sprites are. Strips
 ; that cover sprite columns stay; uncovered columns get the unused strips,
 ; left to right. If that is not enough, a fresh left-to-right plan is used
 ; when it covers everything. Strips never start past WideW/8 - 8.
 PlaceStrips:
+	IFEQ	NO_SPRBEST
+	MOVEM.L	D0-D7/A0-A3,-(SP)
+	ELSE
 	MOVEM.L	D0-D7/A0-A2,-(SP)
+	ENDC
 	LEA	ColOcc,A0
 	LEA	ColNeed,A1
 	LEA	StripCol,A2
@@ -1399,7 +1484,11 @@ PlaceStrips:
 .place:
 	BSR	.first			; D1 = first needed column, or >= D5
 	CMP.W	D5,D1
+	IFEQ	NO_SPRBEST
+	BCC	.done
+	ELSE
 	BCC.S	.done
+	ENDC
 .find:
 	CMP.W	#4,D0
 	BCC.S	.full
@@ -1419,6 +1508,127 @@ PlaceStrips:
 	BFCLR	(A1){D2:8}
 	BRA.S	.place
 .full:					; not enough: try a fresh plan
+	IFEQ	NO_SPRBEST
+; Not all sprite columns fit in 4 strips. Of the strips as they are, a fresh
+; left-to-right plan and a right-to-left one, take the one that leaves out the
+; fewest columns (ties: as they are, then left-to-right). Keeping the old
+; strips could leave a gap in the middle of the picture for many frames.
+	BSR	.count
+	MOVE.W	D3,D4			; columns left out by the strips as they are
+	BSR	.need
+	LEA	StripTmp,A3
+	BSR	.planL
+	BSR	.count
+	MOVE.W	D0,StripTmpN
+	MOVE.W	D3,StripLostL
+	BSR	.need
+	LEA	StripTmpR,A3
+	BSR	.planR
+	BSR	.count
+	CMP.W	StripLostL,D3
+	BCC.S	.pickL
+	CMP.W	D4,D3
+	BCC	.done
+	BRA.S	.map
+.pickL:
+	MOVE.W	StripLostL,D3
+	CMP.W	D4,D3
+	BCC	.done
+	MOVE.W	StripTmpN,D0
+	LEA	StripTmp,A3
+; A3 = plan starts, D0 = how many: a strip already at a start keeps it, the
+; other starts go to the other strips in order (fewer strips move: a moved
+; strip is copied whole)
+.map:
+	MOVEQ	#0,D6			; plan starts taken (bit j)
+	MOVEQ	#0,D4			; strips kept (bit i)
+	MOVEQ	#0,D1
+.mk:	MOVE.W	(A2,D1.W*2),D2
+	MOVEQ	#0,D3
+.mk1:	CMP.W	D0,D3
+	BCC.S	.mk3
+	BTST	D3,D6
+	BNE.S	.mk2
+	CMP.W	(A3,D3.W*2),D2
+	BNE.S	.mk2
+	BSET	D3,D6
+	BSET	D1,D4
+	BRA.S	.mk3
+.mk2:	ADDQ.W	#1,D3
+	BRA.S	.mk1
+.mk3:	ADDQ.W	#1,D1
+	CMP.W	#4,D1
+	BNE.S	.mk
+	MOVEQ	#0,D1
+	MOVEQ	#0,D3
+.ma:	CMP.W	D0,D3
+	BCC	.done
+	BTST	D3,D6
+	BEQ.S	.ma1
+	ADDQ.W	#1,D3
+	BRA.S	.ma
+.ma1:	BTST	D1,D4
+	BEQ.S	.ma2
+	ADDQ.W	#1,D1
+	BRA.S	.ma1
+.ma2:	MOVE.W	(A3,D3.W*2),(A2,D1.W*2)
+	ADDQ.W	#1,D1
+	ADDQ.W	#1,D3
+	BRA.S	.ma
+; ColNeed -> plan at A3, D0 = starts: from the left
+.planL:	MOVEQ	#0,D0
+.pl1:	CMP.W	#4,D0
+	BCC.S	.pl9
+	BSR	.first
+	CMP.W	D5,D1
+	BCC.S	.pl9
+	CMP.W	D7,D1
+	BLS.S	.pl2
+	MOVE.W	D7,D1
+.pl2:	MOVE.W	D1,(A3,D0.W*2)
+	MOVEQ	#4,D2
+	ADD.W	D1,D2
+	BFCLR	(A1){D2:8}
+	ADDQ.W	#1,D0
+	BRA.S	.pl1
+.pl9:	RTS
+; from the right: each strip ends on the last needed column
+.planR:	MOVEQ	#0,D0
+.pr1:	CMP.W	#4,D0
+	BCC.S	.pr9
+	MOVE.W	D5,D1
+.pr2:	SUBQ.W	#1,D1
+	BMI.S	.pr9
+	MOVEQ	#4,D2
+	ADD.W	D1,D2
+	BFTST	(A1){D2:1}
+	BEQ.S	.pr2
+	SUBQ.W	#7,D1
+	BPL.S	.pr3
+	MOVEQ	#0,D1
+.pr3:	CMP.W	D7,D1
+	BLS.S	.pr4
+	MOVE.W	D7,D1
+.pr4:	MOVE.W	D1,(A3,D0.W*2)
+	MOVEQ	#4,D2
+	ADD.W	D1,D2
+	BFCLR	(A1){D2:8}
+	ADDQ.W	#1,D0
+	BRA.S	.pr1
+.pr9:	RTS
+; D3 = needed window columns in ColNeed (D1, D2 used)
+.count:	MOVEQ	#0,D3
+	MOVE.W	D5,D1
+.cn1:	SUBQ.W	#1,D1
+	BMI.S	.cn9
+	MOVEQ	#4,D2
+	ADD.W	D1,D2
+	BFTST	(A1){D2:1}
+	BEQ.S	.cn1
+	ADDQ.W	#1,D3
+	BRA.S	.cn1
+.cn9:	RTS
+	ELSE
 	BSR	.need
 	MOVEQ	#0,D0
 .plan:
@@ -1443,8 +1653,13 @@ PlaceStrips:
 .plan2:
 	MOVE.W	(StripTmp,D0.W*2),(A2,D0.W*2)
 	DBF	D0,.plan2
+	ENDC
 .done:
+	IFEQ	NO_SPRBEST
+	MOVEM.L	(SP)+,D0-D7/A0-A3
+	ELSE
 	MOVEM.L	(SP)+,D0-D7/A0-A2
+	ENDC
 	RTS
 .need:
 	MOVE.L	(A0),(A1)
@@ -1462,6 +1677,71 @@ PlaceStrips:
 	SUBQ.W	#4,D1
 	RTS
 	ENDC
+	ENDC
+
+	IFNE	StripLog
+; 32 bytes a frame: StripCol before PlaceStrips (8), ColOcc (16), StripCol after (8)
+STRIPLOGMAX=4096
+StripLogOld:
+	MOVEM.L	D0/A0-A1,-(SP)
+	MOVE.L	StripLogN,D0
+	CMP.L	#STRIPLOGMAX,D0
+	BCC.S	.x
+	LSL.L	#5,D0
+	LEA	StripLogBuf,A0
+	ADD.L	D0,A0
+	LEA	StripCol,A1
+	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+	LEA	ColOcc,A1
+	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+.x:	MOVEM.L	(SP)+,D0/A0-A1
+	RTS
+StripLogNew:
+	MOVEM.L	D0/A0-A1,-(SP)
+	MOVE.L	StripLogN,D0
+	CMP.L	#STRIPLOGMAX,D0
+	BCC.S	.x
+	LSL.L	#5,D0
+	LEA	StripLogBuf+24,A0
+	ADD.L	D0,A0
+	LEA	StripCol,A1
+	MOVE.L	(A1)+,(A0)+
+	MOVE.L	(A1)+,(A0)+
+	ADDQ.L	#1,StripLogN
+.x:	MOVEM.L	(SP)+,D0/A0-A1
+	RTS
+StripLogWrite:
+	MOVEM.L	D0-D7/A0-A6,-(SP)
+	MOVE.L	$4.W,A6
+	LEA	AutoDosName,A1
+	MOVEQ	#0,D0
+	JSR	-$228(A6)		; OpenLibrary
+	TST.L	D0
+	BEQ.S	.x
+	MOVE.L	D0,A6
+	MOVE.L	#StripLogName,D1
+	MOVE.L	#1006,D2
+	JSR	-30(A6)			; Open
+	MOVE.L	D0,D4
+	BEQ.S	.cl
+	MOVE.L	D4,D1
+	MOVE.L	#StripLogBuf,D2
+	MOVE.L	StripLogN,D3
+	LSL.L	#5,D3
+	JSR	-48(A6)			; Write
+	MOVE.L	D4,D1
+	JSR	-36(A6)			; Close
+.cl:	MOVE.L	A6,A1
+	MOVE.L	$4.W,A6
+	JSR	-$19E(A6)		; CloseLibrary
+.x:	MOVEM.L	(SP)+,D0-D7/A0-A6
+	RTS
+StripLogN:	DC.L	0
+StripLogName:	DC.B	"PROGDIR:AmiPCE.strips",0
 	ENDC
 
 	CNOP	0,8
@@ -1704,7 +1984,11 @@ PonPalBuc4:
 	ENDC
 
 	IFEQ	NO_BURST
+	IFEQ	NO_CRVIS|NO_RTG
+	MOVE.B	CrVis,D0		; BG and sprites off in the shown lines: VCE entry $100 (see RtgFrame)
+	ELSE
 	MOVE.B	VDP_Regs+(5*2)+1,D0	; BG and sprites off: VCE entry $100 (see RtgFrame)
+	ENDC
 	AND.B	#$C0,D0
 	BNE.S	.nburst
 	MOVE.W	VDP_Pal+$200,D1

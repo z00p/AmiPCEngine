@@ -41,6 +41,7 @@ IntuiTextLength      EQU    -330
 Forbid               EQU    -132
 Permit               EQU    -138
 
+	IFNE	NO_MENU2
 GD_PowerON                             EQU    0
 GD_HelpPage                            EQU    1
 GD_Exit                                EQU    2
@@ -56,6 +57,19 @@ GD_ReadBatt                            EQU    11
 GD_SaveBatt                            EQU    12
 GD_ClearBatt                           EQU    13
 
+	ELSE
+GD_PowerON                             EQU    0
+GD_HelpPage                            EQU    1
+GD_Exit                                EQU    2
+GD_Continue                            EQU    3
+GD_Refresh                             EQU    4	; Scanlines (RTG)
+GD_ScrMode                             EQU    5
+GD_INTER                               EQU    6	; Display: AGA / RTG
+GD_Insert                              EQU    7
+GD_JoyType                             EQU    8	; port 2's pad
+GD_JoyPort                             EQU    9	; port 1's pad
+
+	ENDC
 GD_HPcontinue                          EQU    0
 
 GD_AboutCont                           EQU    0
@@ -80,7 +94,11 @@ GD_CheatMore                           EQU    6
 
 GD_Econtinue                           EQU    0
 
+	IFNE	NO_MENU2
 MainMenu_CNT    EQU    14
+	ELSE
+MainMenu_CNT    EQU    10
+	ENDC
 HelpPage_CNT    EQU    1
 About_CNT    EQU    2
 MC68020_CNT    EQU    2
@@ -222,6 +240,7 @@ ImpErrorWidth:
 ImpErrorHeight:
     DC.W    52
 
+	IFNE	NO_MENU2
 MainMenuGTypes:
     DC.W    1
     DC.W    1
@@ -238,6 +257,20 @@ MainMenuGTypes:
     DC.W    1
     DC.W    1
 
+	ELSE
+MainMenuGTypes:
+    DC.W    1
+    DC.W    1
+    DC.W    1
+    DC.W    1
+    DC.W    7
+    DC.W    7
+    DC.W    7
+    DC.W    1
+    DC.W    7
+    DC.W    7
+
+	ENDC
 HelpPageGTypes:
     DC.W    1
 
@@ -269,6 +302,7 @@ CheatGTypes:
 ImpErrorGTypes:
     DC.W    1
 
+	IFNE	NO_MENU2
 MainMenuNGads:
     DC.W    187,171,94,14
     DC.L    PowerONText,0
@@ -327,6 +361,50 @@ MainMenuNGads:
     DC.W    GD_ClearBatt
     DC.L    $0010,0,0
 
+	ELSE
+MainMenuNGads:
+    DC.W    187,171,94,14
+    DC.L    PowerONText,0
+    DC.W    GD_PowerON
+    DC.L    $0010,0,0
+    DC.W    36,171,94,14
+    DC.L    HelpPageText,0
+    DC.W    GD_HelpPage
+    DC.L    $0010,0,0
+    DC.W    501,171,94,14
+    DC.L    ExitText,0
+    DC.W    GD_Exit
+    DC.L    $0010,0,0
+    DC.W    344,171,94,14
+    DC.L    ContinueText,0
+    DC.W    GD_Continue
+    DC.L    $0010,0,0
+    DC.W    448,112,149,13
+    DC.L    ScanText,0
+    DC.W    GD_Refresh
+    DC.L    $0021,0,0
+    DC.W    448,80,149,13
+    DC.L    ScrModeText,0
+    DC.W    GD_ScrMode
+    DC.L    $0021,0,0
+    DC.W    448,96,149,13
+    DC.L    DispText,0
+    DC.W    GD_INTER
+    DC.L    $0021,0,0
+    DC.W    34,80,88,13
+    DC.L    InsertText,0
+    DC.W    GD_Insert
+    DC.L    $0010,0,0
+    DC.W    380,143,140,13
+    DC.L    Port2Text,0
+    DC.W    GD_JoyType
+    DC.L    $0021,0,0
+    DC.W    98,143,140,13
+    DC.L    Port1Text,0
+    DC.W    GD_JoyPort
+    DC.L    $0021,0,0
+
+	ENDC
 HelpPageNGads:
     DC.W    197,150,99,15
     DC.L    HPcontinueText,0
@@ -409,6 +487,7 @@ ImpErrorNGads:
     DC.W    GD_Econtinue
     DC.L    $0010,0,0
 
+	IFNE	NO_MENU2
 MainMenuGTags:
     DC.L    $00000000
     DC.L    $00000000
@@ -448,6 +527,34 @@ MainMenuGTags:
     DC.L    $00000000
 
 
+	ELSE
+MainMenuGTags:
+    DC.L    $00000000
+    DC.L    $00000000
+    DC.L    $00000000
+    DC.L    $8003000E,1
+    DC.L    $00000000
+    DC.L    $8008000E,ScanLabels
+    DC.L    $8008000F,0
+    DC.L    $8003000E,1
+    DC.L    $00000000
+    DC.L    $8008000E,ScrModeLabels
+    DC.L    $8008000F,1
+    DC.L    $8003000E,0
+    DC.L    $00000000
+    DC.L    $8008000E,DispLabels
+    DC.L    $8008000F,0
+    DC.L    $8003000E,1
+    DC.L    $00000000
+    DC.L    $00000000
+    DC.L    $8008000E,PortLabels
+    DC.L    $8008000F,1
+    DC.L    $00000000
+    DC.L    $8008000E,PortLabels
+    DC.L    $8008000F,0
+    DC.L    $00000000
+
+	ENDC
 VelozFormat:
     DC.B    '%ld',0
     CNOP     0,2
@@ -681,6 +788,40 @@ JoyTypeLab3:    DC.B    'Standard Joypad',0
 JoyPortLab0:    DC.B    'Port 1',0
 JoyPortLab1:    DC.B    'Port 2',0
 
+	IFEQ	NO_MENU2
+ScanText:	DC.B	'Scanlines:',0
+DispText:	DC.B	'Display:',0
+Port1Text:	DC.B	'Port 1:',0
+Port2Text:	DC.B	'Port 2:',0
+	CNOP	0,2
+ScanLabels:
+	DC.L	ScanLab0,ScanLab1,ScanLab2,ScanLab3
+	IFEQ	NO_BLENDLV
+	DC.L	ScanLab5,ScanLab4,ScanLab6
+	ELSE
+	DC.L	ScanLab4
+	ENDC
+	DC.L	0
+DispLabels:
+	DC.L	DispLab0,DispLab1,0
+PortLabels:
+	DC.L	PortLab0,PortLab1,PortLab2,PortLab3,0
+ScanLab0:	DC.B	'Off',0
+ScanLab1:	DC.B	'Hard 25%',0
+ScanLab2:	DC.B	'Hard 50%',0
+ScanLab3:	DC.B	'Hard 75%',0
+ScanLab4:	DC.B	'Blended',0
+ScanLab5:	DC.B	'Blended light',0
+ScanLab6:	DC.B	'Blended strong',0
+DispLab0:	DC.B	'AGA',0
+DispLab1:	DC.B	'RTG',0
+PortLab0:	DC.B	'None',0
+PortLab1:	DC.B	'Joystick',0
+PortLab2:	DC.B	'CD32 Joypad',0
+PortLab3:	DC.B	'Std Joypad',0
+	CNOP	0,2
+	ENDC
+
     CNOP    0,2
 
 topaz8:
@@ -722,7 +863,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL12
 	IFEQ	NO_REL13
 	IFEQ	NO_REL14
+	IFEQ	NO_REL20
+    DC.B    'AmiPC-Engine Emulator v2.0  (Debug rows)',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v1.4  (Debug rows)',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v1.3  (Debug rows)',0
 	ENDC
@@ -736,7 +881,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL12
 	IFEQ	NO_REL13
 	IFEQ	NO_REL14
+	IFEQ	NO_REL20
+    DC.B    'AmiPC-Engine Emulator v2.0',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v1.4',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v1.3',0
 	ENDC
@@ -957,6 +1106,7 @@ ImpErrorSTitle:
     DC.B    'AmiPC-Engine Emulator.',0
     CNOP    0,2
 
+	IFNE	NO_MENU2
 MainMenuText0:
     DC.B    7,0
     DC.B    $00
@@ -1074,6 +1224,116 @@ MainMenuText12:
     DC.L    MainMenuIText12
     DC.L    0
 
+	ELSE
+MainMenuText0:
+    DC.B    7,0
+    DC.B    $00
+    DC.B    0
+    DC.W    446,34
+    DC.L    topaz8
+    DC.L    MainMenuIText0
+    DC.L    MainMenuText1
+
+MainMenuText1:
+    DC.B    7,0
+    DC.B    $01
+    DC.B    0
+    DC.W    363,69
+    DC.L    topaz8
+    DC.L    MainMenuIText1
+    DC.L    MainMenuText2
+
+MainMenuText2:
+    DC.B    6,0
+    DC.B    $00
+    DC.B    0
+    DC.W    387,45
+    DC.L    topaz8
+    DC.L    MainMenuIText2
+    DC.L    MainMenuText3
+
+MainMenuText3:
+    DC.B    6,0
+    DC.B    $00
+    DC.B    0
+    DC.W    403,11
+    DC.L    topaz8
+    DC.L    MainMenuIText3
+    DC.L    MainMenuText4
+
+MainMenuText4:
+    DC.B    7,0
+    DC.B    $01
+    DC.B    0
+    DC.W    37,69
+    DC.L    topaz8
+    DC.L    MainMenuIText4
+    DC.L    MainMenuText5
+
+MainMenuText5:
+    DC.B    4,0
+    DC.B    $00
+    DC.B    0
+    DC.W    449,22
+    DC.L    topaz8
+    DC.L    MainMenuIText5
+    DC.L    MainMenuText6
+
+MainMenuText6:
+    DC.B    7,0
+    DC.B    $01
+    DC.B    0
+    DC.W    37,132
+    DC.L    topaz8
+    DC.L    MainMenuIText6
+    DC.L    MainMenuText8
+
+MainMenuText8:
+    DC.B    6,0
+    DC.B    $00
+    DC.B    0
+    DC.W    90,115
+    DC.L    topaz8
+    DC.L    MainMenuIText8
+    DC.L    MainMenuText10
+
+MainMenuText10:
+    DC.B    6,0
+    DC.B    $00
+    DC.B    0
+    DC.W    34,99
+    DC.L    topaz8
+    DC.L    MainMenuIText10
+    DC.L    MainMenuText9
+
+MainMenuText9:
+    DC.B    1,0
+    DC.B    $01
+    DC.B    0
+    DC.W    130,115
+    DC.L    topaz8
+    DC.L    MainMenuIText9
+    DC.L    MainMenuText11
+
+MainMenuText11:
+    DC.B    1,0
+    DC.B    $01
+    DC.B    0
+    DC.W    130,99
+    DC.L    topaz8
+    DC.L    MainMenuIText11
+    DC.L    MainMenuText12
+
+MainMenuText12:
+    DC.B    7,0
+    DC.B    $01
+    DC.B    0
+    DC.W    130,83
+    DC.L    topaz8
+    DC.L    MainMenuIText12
+    DC.L    0
+
+	ENDC
 HelpPageText0:
     DC.B    7,0
     DC.B    $01
@@ -1560,6 +1820,7 @@ MainMenuIText8:
 MainMenuIText9:
     DC.B    '------',0
 
+	IFNE	NO_MENU2
 MainMenuIText10:
     DC.B    'RAM-Battery:',0
 
@@ -1571,6 +1832,19 @@ MainMenuIText12:
 
     CNOP    0,2
 
+	ELSE
+MainMenuIText10:
+    DC.B    'Backup RAM:',0
+
+MainMenuIText11:
+    DC.B    '-                        ',0
+
+MainMenuIText12:
+    DC.B    'No Cartridge Inserted!   ',0
+
+    CNOP    0,2
+
+	ENDC
 HelpPageIText0:
     DC.B    ' Keyboard ',0
 
@@ -1659,7 +1933,11 @@ HelpPageIText21:
 
 HelpPageIText22:
 	IFEQ	NO_REL10
+	IFEQ	NO_MENU2
+    DC.B    'Fire #3 = Run',0
+	ELSE
     DC.B    'Fire #3 = unused',0
+	ENDC
 	ELSE
     DC.B    'Fire #3 = Run',0
 	ENDC
@@ -1672,7 +1950,11 @@ AboutIText0:
 	IFEQ	NO_REL12
 	IFEQ	NO_REL13
 	IFEQ	NO_REL14
+	IFEQ	NO_REL20
+    DC.B    'AmiPC-Engine Emulator v2.0',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v1.4',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v1.3',0
 	ENDC
@@ -1687,7 +1969,11 @@ AboutIText1:
 	IFEQ	NO_REL12
 	IFEQ	NO_REL13
 	IFEQ	NO_REL14
+	IFEQ	NO_REL20
+    DC.B    '(12 November 2026)',0
+	ELSE
     DC.B    '(9 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(4 November 2026)',0
 	ENDC
@@ -1702,7 +1988,11 @@ AboutITextZ:
 	IFEQ	NO_REL12
 	IFEQ	NO_REL13
 	IFEQ	NO_REL14
+	IFEQ	NO_REL20
+    DC.B    'Version 2.0: z00p',0
+	ELSE
     DC.B    'Version 1.4: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 1.3: z00p',0
 	ENDC
@@ -1805,6 +2095,7 @@ ImpErrorIText0:
 
     CNOP    0,2
 
+	IFNE	NO_MENU2
 MainMenuNewMenu0:
     DC.B    1,0
     DC.L    MainMenuMName0
@@ -2151,6 +2442,65 @@ MainMenuNewMenuS0:              ; the settings: CHECKIT, one ticked (RtgScanFlag
     DC.W    0
     DC.L    0,0
 
+	ELSE
+MainMenuNewMenu0:
+    DC.B    1,0
+    DC.L    MainMenuMName0
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    MainMenuMName1
+    DC.L    MainMenuMComm1
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    MainMenuMName2
+    DC.L    MainMenuMComm2
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    $FFFFFFFF
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    MainMenuMName13
+    DC.L    MainMenuMComm13
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    $FFFFFFFF
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    MainMenuMName15
+    DC.L    MainMenuMComm15
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    1,0
+    DC.L    MainMenuMName16
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    MainMenuMName17
+    DC.L    MainMenuMComm17
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    2,0
+    DC.L    MainMenuMName18
+    DC.L    MainMenuMComm18
+    DC.W    $0000
+    DC.L    0,0
+    DC.B    0,0
+    DC.L    0
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+
+	ENDC
 MainMenuMName0:
     DC.B    'Project   ',0
 
@@ -2380,6 +2730,7 @@ NoScr:
     movem.l (sp)+,d0-d1/a0-a1/a6
     rts
 
+	IFNE	NO_MENU2
 MainMenuRender:
     movem.l d0-d5/a0-a2/a6,-(sp)
     move.l  MainMenuWnd,a0
@@ -2555,6 +2906,174 @@ MainMenuRender:
     movem.l (sp)+,d0-d5/a0-a2/a6
     rts
 
+	ELSE
+MainMenuRender:
+    movem.l d0-d5/a0-a2/a6,-(sp)
+    move.l  MainMenuWnd,a0
+    move.b  54(a0),d4
+    ext.w   d4
+    move.b  55(a0),d5
+    ext.w   d5
+    move.l  VisualInfo,NR+4
+    move.l  VisualInfo,IR+4
+    move.l  _GadToolsBase,a6
+    move.l  MainMenuWnd,a0
+    move.l  50(a0),a2
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #126,d0
+    add.w   d4,d0
+    move.w  #112,d1
+    add.w   d5,d1
+    move.w  #208,d2
+    move.w  #13,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #246,d0
+    add.w   d4,d0
+    move.w  #139,d1
+    add.w   d5,d1
+    move.w  #51,d2
+    move.w  #18,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #528,d0
+    add.w   d4,d0
+    move.w  #139,d1
+    add.w   d5,d1
+    move.w  #51,d2
+    move.w  #18,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #126,d0
+    add.w   d4,d0
+    move.w  #96,d1
+    add.w   d5,d1
+    move.w  #208,d2
+    move.w  #13,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #126,d0
+    add.w   d4,d0
+    move.w  #80,d1
+    add.w   d5,d1
+    move.w  #208,d2
+    move.w  #13,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #26,d0
+    add.w   d4,d0
+    move.w  #136,d1
+    add.w   d5,d1
+    move.w  #579,d2
+    move.w  #24,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #24,d0
+    add.w   d4,d0
+    move.w  #135,d1
+    add.w   d5,d1
+    move.w  #583,d2
+    move.w  #26,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #352,d0
+    add.w   d4,d0
+    move.w  #73,d1
+    add.w   d5,d1
+    move.w  #253,d2
+    move.w  #56,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #350,d0
+    add.w   d4,d0
+    move.w  #72,d1
+    add.w   d5,d1
+    move.w  #257,d2
+    move.w  #58,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #364,d0
+    add.w   d4,d0
+    move.w  #4,d1
+    add.w   d5,d1
+    move.w  #247,d2
+    move.w  #55,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #368,d0
+    add.w   d4,d0
+    move.w  #6,d1
+    add.w   d5,d1
+    move.w  #239,d2
+    move.w  #51,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #20,d0
+    add.w   d4,d0
+    move.w  #4,d1
+    add.w   d5,d1
+    move.w  #333,d2
+    move.w  #55,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #26,d0
+    add.w   d4,d0
+    move.w  #73,d1
+    add.w   d5,d1
+    move.w  #314,d2
+    move.w  #56,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #24,d0
+    add.w   d4,d0
+    move.w  #72,d1
+    add.w   d5,d1
+    move.w  #318,d2
+    move.w  #58,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   NR,a1
+    move.w  #9,d0
+    add.w   d4,d0
+    move.w  #63,d1
+    add.w   d5,d1
+    move.w  #613,d2
+    move.w  #105,d3
+    TallBevelM
+    move.l  a2,a0
+    lea.l   IR,a1
+    move.w  #13,d0
+    add.w   d4,d0
+    move.w  #65,d1
+    add.w   d5,d1
+    move.w  #605,d2
+    move.w  #101,d3
+    TallBevelM
+    move.l  _IntuitionBase,a6
+    move.l  MainMenuWnd,a0
+    move.l  50(a0),a0
+    lea.l   MainMenuText0,a1
+    move.l  d4,d0
+    move.l  d5,d1
+    TallITextM
+    movem.l (sp)+,d0-d5/a0-a2/a6
+    rts
+
+	ENDC
     XDEF    OpenMainMenuWindow
 
 OpenMainMenuWindow:
@@ -2604,6 +3123,9 @@ MainMenuGL:
     asl.l   #1,d1
     add.l   d1,a0
     move.w  (a0),d0
+	IFEQ	ChoosOff
+	jsr	ChooserPre		; a cycle gadget: a chooser, and the label as a text gadget
+	ENDC
     move.l  a3,a0
     lea.l   BufNewGad,a1
     move.l  a4,a2
@@ -2619,6 +3141,9 @@ MainMenuCOK:
     lea.l   MainMenuGadgets,a0
     add.l   d0,a0
     move.l  a3,(a0)
+	IFEQ	ChoosOff
+	jsr	ChooserPost
+	ENDC
 MainMenuTL:
     tst.l   (a4)
     beq.s   MainMenuDN
@@ -2668,6 +3193,9 @@ MainMenuDN:
     suba.l  a1,a1
     jsr     GT_RefreshWindow(a6)
     jsr     MainMenuRender
+	IFEQ	ChoosOff
+	jsr	ChooserAdd
+	ENDC
     moveq   #0,d0
 MainMenuDone:
     movem.l (sp)+,d1-d4/a0-a4/a6
@@ -2702,6 +3230,9 @@ MainMenuNMenu:
     move.l  MainMenuWnd,a0
     cmpa.l  #0,a0
     beq     MainMenuNWnd
+	IFEQ	ChoosOff
+	jsr	ChooserRem
+	ENDC
     jsr     CloseWindow(a6)
     move.l  #0,MainMenuWnd
 MainMenuNWnd:
@@ -2712,6 +3243,9 @@ MainMenuNWnd:
     jsr     FreeGadgets(a6)
     move.l  #0,MainMenuGList
 MainMenuNGad:
+	IFEQ	ChoosOff
+	jsr	ChooserFree
+	ENDC
     movem.l (sp)+,d0-d1/a0-a2/a6
     rts
 

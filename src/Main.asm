@@ -21,6 +21,12 @@ DbgRows=0
 	IFND	DbgProbe	; 1 (with DbgRows, AGA): the top row shows why the background is redrawn
 DbgProbe=0
 	ENDC
+	IFND	StripLog	; AutoExit test builds (AGA): per frame the old sprite strips, the sprite columns and the new strips -> PROGDIR:AmiPCE.strips
+StripLog=0
+	ENDC
+	IFND	AGC		; 1 = test: AGA chunky mode (the RTG composer, a sticky 256-colour palette, C2P into 8 planes)
+AGC=0
+	ENDC
 	IFND	ShowPerformance	; default, or set with -DShowPerformance=x
 ShowPerformance=0
 	ENDC
@@ -83,6 +89,12 @@ NO_SPRAREA=0
 	ENDC
 	IFND	NO_SPRCOVER	; 1 = the 4 sprite strips stay at window px 0-255 (needs NO_WIDE=0)
 NO_SPRCOVER=0
+	ENDC
+	IFND	NO_SPRBEST	; 1 = when 4 sprite strips can't cover every sprite column, keep them as they are unless a left-to-right plan covers all
+NO_SPRBEST=0
+	ENDC
+	IFND	NO_SPRRACE	; 1 = AGA sprite data copied top to bottom, a moved strip's position only from the next frame (ghosts)
+NO_SPRRACE=0
 	ENDC
 	IFND	NO_NTSCTOP	; 1 = picture on line $30 on NTSC too (centred for PAL; on NTSC too low, bottom cut off)
 NO_NTSCTOP=0
@@ -154,6 +166,9 @@ AutoMenuCont=0
 	IFND	MenuAuto	; menu test builds: Insert PCE:auto1.pce and auto2.pce in turn and Power ON without
 MenuAuto=0		; the requester, leave each game after MenuAuto frames (as Esc), MenuAutoMax trips
 	ENDC
+	IFND	MenuAutoIns	; with MenuAuto: 1 = Insert PCE:auto1.pce only, no Power ON (the menu after Insert)
+MenuAutoIns=0
+	ENDC
 	IFND	MenuAutoMax
 MenuAutoMax=12
 	ENDC
@@ -210,6 +225,9 @@ NO_TALLMENU=0
 	ENDC
 	IFND	NO_SCRLO	; 1 = R7/R8 logged only on the high byte, and a BXR change reloads the BG row (HuZERO's per-line BXR lost)
 NO_SCRLO=0
+	ENDC
+	IFND	NO_CRVIS	; 1 = AGA bitplane DMA and the BG-off colour from the VDC CR at the Amiga vblank (SF2' fights blank:
+NO_CRVIS=0	; its CR is off below the picture); 0 = from the CR during the shown lines of the frame
 	ENDC
 	IFND	NO_VBLLINE	; 1 = vblank interrupt (and SAT copy) always on line 251 (Mesen: after the last display line, VDW + 1)
 NO_VBLLINE=0
@@ -283,6 +301,9 @@ NO_VRAMSAME=0
 	IFND	NO_DDAPER	; 1 = the timer-tick DDA period on a PAL screen is 610 (worked out from 227.5 colour clocks a line, NTSC's average: 0.36% long); 0 = 609 (PAL's 227: 313 x 227 / 116.9 = 607.8, 0.2% long as meant, so the queue trims less often)
 NO_DDAPER=0
 	ENDC
+	IFND	NO_DDAGAP	; 1 = a DDA stream whose channel the game switches off ($0804 = 0) ends once its queue has played out, and its voice goes to a tone; 0 = it keeps its voice for the 8 'live' frames as when DDA stays on (Blazing Lazers turns its drum channel off for 4 frames every beat: the voice went to a harmony channel for a frame or two each beat and the drums restarted, 94 cut notes a minute)
+NO_DDAGAP=0
+	ENDC
 	IFND	NO_TILEWRAP	; 1 = AGA takes a BAT tile number of $800 or more as it is; 0 = it wraps to the 32K words of VRAM as on RTG (Parodius after the bell's flash bomb fills 480 hidden cells with tiles $Exx-$Fxx: AGA read their redraw flags past the end of TabRedef, never cleared, and redrew them every frame: 17 fps)
 NO_TILEWRAP=0
 	ENDC
@@ -349,6 +370,33 @@ NO_INDRD=0
 	IFND	NO_TSTROM	; 1 = TST #imm,abs / abs,X reads the write page (a ROM slot's write sink, not the ROM); 0 = the read page (Momotarou Densetsu Gaiden / II: TST #$FF,$48AA,X on a ROM table picks the text font)
 NO_TSTROM=0
 	ENDC
+	IFND	DispTest	; test builds (NO_MENU2=0): 1/2 = the Display gadget set to AGA/RTG before the menu loop
+DispTest=0
+	ENDC
+	IFND	PadTest	; test builds (NO_MENU2=0): 1 = port 1 CD32 pad, port 2 joypad
+PadTest=0
+	ENDC
+	IFND	NO_CHOOSER	; 1 = the menu's settings stay GadTools cycle gadgets; 0 = chooser.gadget pop-up lists when it opens (OS 3.5 and up), else the cycles
+NO_CHOOSER=0
+	ENDC
+	IFND	ChooserVer	; the chooser.gadget version asked for (test builds: 99 = the cycle fallback, as on OS 3.1)
+ChooserVer=44
+	ENDC
+	IFND	NO_RTGBLANK	; 1 = after an RTG run the AGA display keeps the emulator's bitplanes (BPLCON0) until the menu screen is up: a stale picture flashes on Esc
+NO_RTGBLANK=0
+	ENDC
+	IFND	RtgExitHold	; test builds: ticks to wait after the RTG play screen closes (a grab of the AGA display before the menu)
+RtgExitHold=0
+	ENDC
+	IFND	DispAlt		; test builds with MenuAuto: Display AGA on odd trips, RTG on even ones
+DispAlt=0
+	ENDC
+	IFND	NO_MENU2	; 1 = the 1.4 launcher window (Juan's ghosted gadgets, one pad on port 2, the Options menu); 0 = Screen / Display / Scanlines gadgets, a pad type for each port, the Backup RAM text, dead items gone
+NO_MENU2=0
+	ENDC
+	IFND	NO_REL20	; 1 = 1.4 version texts
+NO_REL20=0
+	ENDC
 	IFND	NO_REL14	; 1 = 1.3 version texts
 NO_REL14=0
 	ENDC
@@ -369,6 +417,9 @@ ScanOff=NO_SCANLINES|NO_RTG|NO_RTGFIX	; the scanline code is in RTG.asm (needs t
 SCANDEF=0
 	ENDC
 TallOff=NO_TALLMENU|NO_RTG|NO_RTGFIX	; the tall menu code is in RTG.asm
+DispOff=NO_MENU2|NO_RTG|NO_RTGFIX	; the menu's Display gadget (AGA / RTG for each Power ON): code in RTG.asm
+ChoosOff=NO_CHOOSER|NO_MENU2	; the menu's settings as chooser.gadget pop-ups (Menu.asm, GadToolsBox.asm)
+RtgBlankOff=NO_RTGBLANK|NO_MENU2	; RtgTakeover: no bitplanes on the AGA side while the game plays on RTG (RTG.asm)
 ; Menu drawing calls: through RTG.asm's Tall* helpers (double height on RTG, else as they were)
 TallBevelM:	MACRO
 	IFEQ	TallOff
@@ -448,6 +499,9 @@ NF_Menu:
 	IFEQ	NO_RTG
 	SUB.L	A0,A0		; EMBED builds: RTG from the CLI word or RTGFORCE
 	JSR	RtgStart
+	IFNE	AGC
+	JSR	AgcStart
+	ENDC
 	ENDC
 	IFNE	AutoExit
 	MOVEM.L	D0-D7/A0-A6,-(SP)
@@ -471,7 +525,11 @@ NF_Menu:
 	IFEQ	NO_REL12
 	IFEQ	NO_REL13
 	IFEQ	NO_REL14
+	IFEQ	NO_REL20
+	DC.B	"$VER:AmiPC-Engine Emulator v2.0 (12.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.4 (9.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.3 (4.11.26)",0,0
 	ENDC
@@ -497,9 +555,19 @@ EmulatorStart:
 
 ; -=-=-
 	LEA	DirPrefs,A5
+	IFEQ	NO_MENU2
+	MOVE.B	$16(A5),D0		; port 1: 0 none, 1 joystick, 2 CD32 pad, 3 joypad
+	AND.W	#$0003,D0
+	MOVE.L	(PadPrg1,D0.W*4),PadRut1
+	MOVE.B	$08(A5),D0		; port 2: 0 joystick, 1 none, 2 CD32 pad, 3 joypad (Juan's order)
+	AND.W	#$0003,D0
+	MOVE.L	(PadPrg2,D0.W*4),PadRut2
+	MOVE.L	#LeePads,JoyControlRut
+	ELSE
 	MOVE.B	$08(A5),D0
 	AND.W	#$0003,D0
 	MOVE.L	(JoyControlPrg,D0.W*4),JoyControlRut
+	ENDC
 ; -=-=-
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -515,6 +583,9 @@ EmulatorStart:
 	ENDC
 	IFEQ	NO_RTG
 	JSR	RtgPlayOpen		; OS alive: the RTG play screen (when RTG is wanted)
+	IFNE	AGC
+	JSR	AgcOpen
+	ENDC
 	ENDC
 	JSR	CongelaAMIGA
 	IFEQ	NO_RTG
@@ -650,8 +721,17 @@ DbgLoop:
 	JSR	DbgLapOther
 	ENDC
 BUC:
+	IFNE	AGC
+	TST.B	vBlankOccurred		; already here: the last frame ran past the vblank (AgcC2P skips a picture)
+	SNE	AgcLate
+.wvb:
+	ENDC
 	TST.B	vBlankOccurred
+	IFNE	AGC
+	BEQ.S	.wvb
+	ELSE
 	BEQ.S	BUC
+	ENDC
 	SF	vBlankOccurred
 	IFNE	DbgRows
 	JSR	DbgFrame
@@ -1265,6 +1345,9 @@ AutoWriteResult:
 	ENDC
 	IFNE	DdaDump
 	JSR	DdaDumpWrite
+	ENDC
+	IFNE	StripLog
+	JSR	StripLogWrite
 	ENDC
 	IFNE	ProfOn
 	BSR	ProfWrite		; before the result: the rig stops once that file is there
@@ -1953,6 +2036,11 @@ AutoGuardTab:	DC.L	Guard_CodeEnd,Guard_PantA,Guard_PantB,Guard_GrafA,Guard_GrafB
 	IFNE	DbgRows
 	INCLUDE "DbgRows.asm"
 	ENDC
+	IFNE	AGC
+	IFEQ	NO_RTG
+	INCLUDE	"AGC.asm"	; in the code hunk (no sections of its own)
+	ENDC
+	ENDC
 
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -2130,6 +2218,12 @@ SetPicTop:
 	MOVEQ	#$2F,D0
 	IFNE	DbgRows
 	MOVEQ	#$34,D0			; the debug rows use lines $1C-$2C, the palette load follows
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.dbg
+	MOVEQ	#$2F,D0			; AGA chunky mode: the panel goes under the picture (DbgAgcPanel)
+.dbg:
+	ENDC
 	ENDC
 	IFEQ	ShowFps+DbgRows		; the fps rows use lines $21-$29
 	TST.B	DirPrefs+$0F
@@ -2310,6 +2404,9 @@ Salir:
 	BSR	DescongelaAMIGA
 	IFEQ	NO_RTG
 	JSR	RtgPlayClose
+	IFNE	AGC
+	JSR	AgcDumpWrite		; before RtgQuit frees the chunky buffer
+	ENDC
 	JSR	RtgQuit			; test builds too: the big buffers and tall pictures back
 	ENDC
 	JMP	AutoWriteResult		; OS is back: write the counts, RTS to the caller
@@ -2491,8 +2588,14 @@ RunCopperScrolls:
 
 ;	move.w	#$8000,d0
 ;	btst	#7,VDP_Regs+(5*2)+1
+	IFEQ	NO_CRVIS|NO_RTG
+	moveq	#0,d0
+	move.b	CrVis,d0		; BG / sprite bits of the shown lines
+	move.w	d0,d1
+	ELSE
 	move.w	VDP_Regs+(5*2),d0
 	move.w	VDP_Regs+(5*2),d1
+	ENDC
 
 	lsr.w	#6,d0
 	lsr.w	#7,d1
@@ -2583,7 +2686,11 @@ RunCopperScrolls:
 	MOVE.B	(VDP_Regs+(9*2)+1),D3
 	LSR.B	#4,D3
 	AND.W	#$0007,D3
+	IFNE	AGC
+	MOVE.W	(VBGHeight.L,D3.W*2),D4	; (AGA chunky mode's code between: out of PC reach with the debug rows)
+	ELSE
 	MOVE.W	(VBGHeight.W,PC,D3.W*2),D4
+	ENDC
 	lsl.w	#3,D4
 
 	move.w	(a6),d7
@@ -2663,7 +2770,11 @@ gemmy:
 
 
 	IFNE	OnlyAGA
+	IFNE	AGC
+	JSR	PonePaleta_AGA		; (AGC.asm in the hunk: out of BSR range)
+	ELSE
 	BSR	PonePaleta_AGA
+	ENDC
 	ELSE
 	BSR	PonePaleta_SAGA
 	ENDC
@@ -2705,6 +2816,14 @@ RtgVblPal:
 	BHI.S	LsVbl1
 	MOVE.W	D1,LsFrame
 LsVbl1:
+	ENDC
+	IFNE	AGC
+	IFEQ	NO_RTG
+	TST.B	AgcOn
+	BEQ.S	AgcVblX
+	JSR	AgcFlip			; the picture switched at the frame's start
+AgcVblX:
+	ENDC
 	ENDC
 	ST	vBlankOccurred
 
@@ -3269,6 +3388,128 @@ LeeCD32Joypad:
 
 	RTS
 
+	IFEQ	NO_MENU2
+; LeePads: the pad on each port, read as the type picked for that port in the menu (Joy-Control),
+; both ORed into JoyX (the keyboard is added by the caller). D3 gathers the bits: 0 Up, 1 Right,
+; 2 Down, 3 Left, 4 button I, 5 button II, 6 Select, 7 Run. Uses D0-D3/A0/A3 only (the callers
+; save those).
+	CNOP	0,8
+LeePads:
+	LEA	Regs,A3
+	MOVEQ	#0,D3
+	MOVE.L	PadRut1,A0
+	JSR	(A0)
+	MOVE.L	PadRut2,A0
+	JSR	(A0)
+	MOVE.B	D3,JoyX(A3)
+	RTS
+	CNOP	0,4
+PadRut1:	DC.L	PadNone
+PadRut2:	DC.L	PadJoy2
+PadPrg1:	DC.L	PadNone,PadJoy1,PadCD1,PadPad1	; port 1 (prefs $16, the menu's order)
+PadPrg2:	DC.L	PadJoy2,PadNone,PadCD2,PadPad2	; port 2 (prefs $08, Juan's order)
+
+PadNone:
+	RTS
+
+; PadDirs: D0 = JOYxDAT; the directions into D3.
+PadDirs:
+	BSR	LEEJOY			; D2: 0 Right, 1 Left, 2 Up, 3 Down
+	AND.W	#$000F,D2
+	MOVE.B	PadDirT(PC,D2.W),D0
+	OR.B	D0,D3
+	RTS
+PadDirT:	DC.B	$0,$2,$8,$A,$1,$3,$9,$B,$4,$6,$C,$E,$5,$7,$D,$F	; -> 1 Right, 3 Left, 0 Up, 2 Down
+
+; Joystick: fire 1 (pin 6, CIA-A) = button II, fire 2 (pin 9, POTINP) = button I.
+; Joypad: the same and fire 3 (pin 5, POTINP) = Run.
+PadJoy2:
+	MOVE.W	$DFF00C,D0		; JOY1DAT
+	BSR.S	PadDirs
+	BTST	#7,$BFE001		; fire 1 of port 2
+	BNE.S	.f2
+	BSET	#5,D3
+.f2:	MOVE.W	#$FF00,$DFF034		; POTGO
+	NOP
+	NOP
+	BTST	#6,$DFF016		; DATRY: pin 9 of port 2
+	BNE.S	.x
+	BSET	#4,D3
+.x:	RTS
+PadPad2:
+	BSR.S	PadJoy2
+	BTST	#4,$DFF016		; DATRX: pin 5 of port 2
+	BNE.S	.x
+	BSET	#7,D3
+.x:	RTS
+PadJoy1:
+	MOVE.W	$DFF00A,D0		; JOY0DAT
+	BSR.S	PadDirs
+	BTST	#6,$BFE001		; fire 1 of port 1
+	BNE.S	.f2
+	BSET	#5,D3
+.f2:	MOVE.W	#$FF00,$DFF034
+	NOP
+	NOP
+	BTST	#2,$DFF016		; DATLY: pin 9 of port 1
+	BNE.S	.x
+	BSET	#4,D3
+.x:	RTS
+PadPad1:
+	BSR.S	PadJoy1
+	BTST	#0,$DFF016		; DATLX: pin 5 of port 1
+	BNE.S	.x
+	BSET	#7,D3
+.x:	RTS
+
+; CD32 pad, as LeeCD32Joypad and ReadCD32 for either port: \1 JOYxDAT, \2 the CIA-A PRA bit of pin 6
+; (the clock), \3 the POTINP bit of pin 9 (the data), \4 POTGO (pin 5 low: shift mode).
+PadCdM:	MACRO
+	MOVE.W	\1,D0
+	BSR	PadDirs
+	BSET	#\2,$BFE201
+	BCLR	#\2,$BFE001
+	MOVE.W	#\4,$DFF034
+	MOVEQ	#0,D0
+	MOVEQ	#7,D1
+	BRA.S	.c4\@
+.c3\@:	TST.B	$BFE001
+	TST.B	$BFE001
+	TST.B	$BFE001
+.c4\@:	TST.B	$BFE001
+	TST.B	$BFE001
+	TST.B	$BFE001
+	TST.B	$BFE001
+	TST.B	$BFE001
+	MOVE.W	$DFF016,D2
+	BSET	#\2,$BFE001
+	BCLR	#\2,$BFE001
+	BTST	#\3,D2
+	BNE.S	.c5\@
+	BSET	D1,D0
+.c5\@:	DBF	D1,.c3\@
+	BCLR	#\2,$BFE201
+	MOVE.W	#$FFFF,$DFF034
+	LSR.B	#2,D0
+	BCC.S	.np\@
+	BSET	#7,D3			; Play = Run
+.np\@:	MOVE.B	D0,D1
+	AND.B	#$03,D1
+	CMP.B	#$03,D1			; both shoulders = back to the menu
+	BNE.S	.nm\@
+	ST	SalirMenu(A3)
+.nm\@:	CD32M	4,D3	; button I	(Rewind)
+	CD32M	5,D3	; button II	(Forward)
+	CD32M	6,D3	; Select	(Green)
+	CD32M	7,D3	; Run		(Yellow)
+	CD32M	5,D3	; button II	(Red)
+	CD32M	4,D3	; button I	(Blue)
+	RTS
+	ENDM
+PadCD2:	PadCdM	$DFF00C,7,14,$6F00
+PadCD1:	PadCdM	$DFF00A,6,10,$F600
+	ENDC
+
 ;***********************************************************************
 ;Reads CD 32 Controller
 ;You must read joystick positions or button in normal way
@@ -3830,6 +4071,7 @@ DbgCopPt:
 	DC.W	$0100,$1201
 	DC.W	$2D07,$FFFE
 	DC.W	$0100,$0201
+DbgCopEnd:
 	ENDC
 
 ;	---------------------=> Muestra Fps
@@ -4170,6 +4412,10 @@ PSGDdaHoldBuf:	DS.B	6*264		; per channel: its last DDA level, played when the qu
 
 ;	------------------------
 	SECTION	Tablas,BSS
+	IFNE	StripLog
+	CNOP	0,4
+StripLogBuf:	DS.B	STRIPLOGMAX*32	; (VDP_AGA.asm: in the code section it pushed the tables out of reach)
+	ENDC
 	IFEQ	NO_POPRAM
 PopRAM:	DS.B	32*1024
 	ENDC
@@ -4278,4 +4524,7 @@ GameCart2End:
 
 	IFEQ	NO_RTG
 	INCLUDE	"RTG.asm"	; own sections: code, data, BSS
+	IFNE	AGC
+	INCLUDE	"AGCvars.asm"
+	ENDC
 	ENDC

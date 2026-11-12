@@ -349,6 +349,21 @@ noVblankInt:
 
 
 
+	IFEQ	NO_CRVIS|NO_RTG
+	MOVEM.L	D0/D2/A0,-(SP)		; CrVis: the CR at line 0 OR every CR write made above line 224
+	MOVE.B	RtgCRStart,D2
+	MOVE.W	RtgCRN,D0
+	LEA	RtgCRList,A0
+	BRA.S	.cv2
+.cv1:	CMP.W	#224,(A0)
+	BCC.S	.cv3
+	OR.B	3(A0),D2
+	ADDQ.L	#4,A0
+.cv2:	DBF	D0,.cv1
+.cv3:	AND.B	#$C0,D2
+	MOVE.B	D2,CrVis
+	MOVEM.L	(SP)+,D0/D2/A0
+	ENDC
 	lea	Regs,A3
 	IFEQ	NO_BGLINE|NO_BGMASK
 	JSR	BgLogSwap		; before the scroll list is offered to the vblank

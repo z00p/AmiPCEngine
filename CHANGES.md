@@ -4,6 +4,36 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.0
+
+- Two programs in the drawer: AGA and RTG (the same program with the
+  ToolType RTG; the menu opens on the RTG screen, no 15 kHz screen is
+  needed). Up to 1.4 they were AmiPCEngine and AmiPCEngine RTG.
+  Unpacking over 1.4 leaves the old icons: delete them by hand, and
+  use the new name in Shell scripts and game launchers. The Debug
+  versions are no longer in the archive; they are available on
+  request.
+- AGA now shows the PC Engine's own colours. The picture is drawn as
+  on RTG (every sprite palette, the full width) and copied into an
+  8-plane AGA screen; only the parts that changed are copied, and
+  scrolling is done by the hardware, with a fixed status bar (as in
+  Parodius Da!) scrolled apart from the stage. It needs a fast
+  machine: an A1200 with a PiStorm, a fast 68060 or similar. 68030
+  and 68020 machines are no longer supported.
+- Sound: a sampled (DDA) channel that a game switches off for a
+  moment keeps its Amiga voice. Blazing Lazers' drums no longer click
+  and cut into a harmony part on every beat.
+- The simpler AGA picture of 1.4, still used when memory runs short:
+  sprites no longer leave a ghost where they moved, fewer go missing
+  (R-Type), and Street Fighter II' fights are drawn on a real A1200.
+- New launcher: Screen (NTSC / PAL, on RTG) and Scanlines are gadgets
+  in the window, kept by Save Prefs, and Display shows AGA or RTG.
+  Each port has its own pad type (None, Joystick, CD32 Joypad, Std
+  Joypad), and both ports are read. On OS 3.5 and later the settings
+  open a list to pick from. The backup RAM state is shown (no save
+  file yet, found, loaded, game saved). Juan's gadgets and menu items
+  that did nothing are gone.
+
 ## New in 1.4
 
 - Controls answer a frame sooner. Each emulated frame now starts at the

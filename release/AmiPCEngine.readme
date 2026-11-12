@@ -5,7 +5,7 @@ Type:         misc/emu
 Version:      @VERSION@
 Replaces:     misc/emu/AmiPCEngine.lha
 Architecture: m68k-amigaos
-Requires:     AGA, 68020 or better (PiStorm or similar for full speed)
+Requires:     AGA, a fast CPU (PiStorm, fast 68060 or similar)
 Distribution: Aminet
 Kurz:         PC-Engine/TurboGrafx-16-Emulator
 
@@ -25,6 +25,16 @@ update, released with his permission, is built from them and finishes
 what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
+
+New in 2.0
+----------
+AGA now shows the PC Engine's own colours and every sprite palette.
+Two programs: AGA and RTG (the menu opens on the RTG screen, no 15 kHz
+screen needed). A fast machine is needed: a PiStorm, a fast 68060 or
+similar; 68030 and 68020 machines are no longer supported. A new
+launcher: Screen and Scanlines in the window, a pad type for each
+port, the backup RAM state. Blazing Lazers' drums no longer click.
+The Debug versions are available on request. See CHANGES.txt.
 
 New in 1.4
 ----------
@@ -52,19 +62,18 @@ World Circuit, Fighting Run and others. See CHANGES.txt.
 
 Requirements
 ------------
-- An AGA Amiga with a 68020 or better, AmigaOS 3.0 or later.
-- Full speed was measured on an A1200 with a PiStorm (RTG screen). A
-  68030/50 was tested in WinUAE only and plays below full speed.
+- An AGA Amiga with AmigaOS 3.0 or later and a fast CPU: an A1200
+  with a PiStorm, a fast 68060 or similar. Tested on a PiStorm A1200.
 - RTG icon: Picasso96 and a 16-bit screen mode. Without them it falls
   back to the AGA screen.
 
 Installation
 ------------
-Unpack the archive anywhere. Start AmiPCEngine (AGA video output) or
-AmiPCEngine RTG (Picasso96 screen, ToolType RTG). Choose Insert, pick a
-.pce file in the Homebrew drawer or anywhere else, then Power ON. Esc
-returns to the menu. See ReadMe.txt in the drawer for the keys and
-pads (keyboard, Amiga joystick, CD32 pad).
+Unpack the archive anywhere. In the AmiPCEngine drawer start AGA
+(AGA video output) or RTG (Picasso96 screen, ToolType RTG). Choose
+Insert, pick a .pce file in the Homebrew drawer or anywhere else, then
+Power ON. Esc returns to the menu. See ReadMe.txt in the drawer for
+the keys and pads (keyboard, Amiga joystick, CD32 pad).
 
 No games are included. You need HuCard images of your own, copies you
 may legally have.
@@ -73,16 +82,15 @@ Limits
 ------
 Not all games work. Not supported: CD-ROM games, SuperGrafx.
 Sound: 6 PSG channels on the Amiga's 4, the
-loudest four at each frame. AGA: one sprite palette shared by all
-sprites. Tested by us on an A1200 with a PiStorm (RTG mostly, AGA
-less) and in WinUAE. Not tested on a real 68030/040/060 card or ECS.
+loudest four at each frame. Tested by us on an A1200 with a PiStorm
+(RTG and AGA) and in WinUAE. Not tested on a real 68060 card or ECS.
 The full list is in ReadMe.txt.
 
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 1.4 by z00p. Web and menu graphics: Multivac. Thanks to Zener
-and Sandman.
+1.0 to 2.0 by z00p. Web and menu graphics: Multivac. Thanks to Zener
+and Sandman, and to reassembler for his guidance and direction.
 
 PC Engine is a trademark of NEC and Hudson Soft, TurboGrafx-16 of NEC.
 This program is not affiliated with or endorsed by them.

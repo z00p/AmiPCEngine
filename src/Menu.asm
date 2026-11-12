@@ -57,6 +57,13 @@ MenuLaunch:
 	JSR	-$228(A6)
 	MOVE.L	D0,_StcBase
 YaStc20:
+	IFEQ	ChoosOff
+	MOVEQ	#ChooserVer,D0
+	LEA	ChoLibNom(PC),A1
+	MOVE.L	4.W,A6
+	JSR	-$228(A6)		; OpenLibrary: none (OS 3.1) = the cycle gadgets
+	MOVE.L	D0,_ChooserBase
+	ENDC
 ; <=-----------------------=>
 
 ; <=----------------------------------=>
@@ -80,9 +87,15 @@ YaStc20:
 	MOVE.L	(A0),D1
 	JSR	-$7E(A6)
 CLI:
+	IFEQ	NO_MENU2
+	BSR	LoadPrefs		; before RtgStart: the prefs' Display setting
+	ENDC
 	IFEQ	NO_RTG
 	MOVE.L	MENSWB(PC),A0		; RTG: ToolType or CLI word, the P96 modes
 	JSR	RtgStart
+	IFNE	AGC
+	JSR	AgcStart		; AGA chunky mode test builds: its buffers (no RTG wanted)
+	ENDC
 	ENDC
 ; <=----------------------------------=>
 
@@ -139,6 +152,9 @@ LibsError:
 	LiberaLib _AslBase
 	LiberaLib _XpkBase
 	LiberaLib _StcBase
+	IFEQ	ChoosOff
+	LiberaLib _ChooserBase
+	ENDC
 MenuRET:
 	RTS
 ; <=-----------------------=>
@@ -232,6 +248,11 @@ DosNom:		DC.B	"dos.library",0
 AslNom:		DC.B	"asl.library",0
 XpkNom:		DC.B	"xpkmaster.library",0
 StcNom:		DC.B	"stc.library",0
+	IFEQ	ChoosOff
+ChoLibNom:	DC.B	"gadgets/chooser.gadget",0
+	EVEN
+_ChooserBase:	DC.L	0
+	ENDC
 Stc2Nom:	DC.B	"stc020.library",0
 ; -=-=-=-==-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-
 		CNOP	0,8
@@ -255,14 +276,20 @@ tErOpenFile:	DC.B	" I cannot open file selected! ",0
 tErReadFile:	DC.B	"Error while loading Cartridge!",0
 tErNoNESCart:	DC.B	"      Invalid Cartridge!      ",0
 tErOutOfMem:	DC.B	"   -=>  Out of memory!  <=-   ",0
+	IFNE	NO_MENU2
 tErChecksum:	DC.B	" CAUTION:  Checksum is wrong! ",0
+	ENDC
 tErSavePrefs:	DC.B	"    Preferences not saved!    ",0
 	IFEQ	NO_BRAMSAVE
 tErSaveBram:	DC.B	"     Game save not written!   ",0
 	ENDC
+	IFNE	NO_MENU2
 tErIDNoCorrecto:DC.B	"CAUTION: Bad GameBoy ID '00C3'",0
 tErPila:	DC.B	"   6502's Stack Gets Crazy!   ",0
 tErCodiLegal:	DC.B	"  Código ilegal $00 en $0000  ",0
+	ELSE
+tErPila:	DC.B	"   HuC6280 stack overflow!    ",0
+	ENDC
 tErNoMapSupp:	DC.B	" This mapper is not supported ",0
 
 ; -=-=-=-==-=-=-=-==-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -284,7 +311,9 @@ EngineInfoBuf:	DS.L	4
 	CNOP	0,8
 Programa:
 ; ------------------------------------------
+	IFNE	NO_MENU2
 	BSR	LoadPrefs
+	ENDC
 	BSR	PonPrefs
 ; ------------------------------------------
 	IFEQ	NO_RTG|NO_RTGFIX
@@ -323,6 +352,21 @@ Programa:
 ; ------------------------------------------
 	BSR	ImpJoyType
 ; ------------------------------------------
+	IFNE	DispTest		; test builds: as if the Display gadget had been set to DispTest-1 (0 AGA, 1 RTG)
+	MOVEQ	#DispTest-1,D0
+	MOVE.W	#GD_INTER,D1
+	BSR	SetCycle
+	BSR	DispSel
+	ENDC
+	IFNE	PadTest			; test builds: port 1 = CD32 pad, port 2 = joypad (both read every frame)
+	MOVEQ	#2,D0
+	MOVE.W	#GD_JoyPort,D1
+	BSR	SetCycle
+	MOVEQ	#3,D0
+	MOVE.W	#GD_JoyType,D1
+	BSR	SetCycle
+	BSR	ImpJoyType
+	ENDC
 ; <=-----------------------=>
 	TST.L	_AslBase(PC)
 	BEQ.S	NoHayAsl
@@ -498,7 +542,26 @@ ContinueCon:
 ; -=-=-
 	LEA	DirPrefs(PC),A5
 ; -=-=-
+	IFNE	NO_MENU2
+	IFNE	AGC&DbgRows
+	TST.B	AgcWant			; AGA chunky mode with the debug rows: a PAL screen (the screen gadget is
+	BEQ.S	.agcntsc		; ghosted): only PAL has room for the rows under the picture
+	CLR.B	$0F(A5)
+.agcntsc:
+	ENDC
 	MOVEQ	#0,D1
+	ELSE
+	MOVEQ	#0,D1
+	IFNE	AGC
+	TST.B	AgcWant			; AGA colour mode: NTSC (the screen gadget is ghosted); with the debug
+	BEQ.S	.agcntsc		; rows PAL: only PAL has room for the rows under the picture
+	IFNE	DbgRows
+	MOVE.W	#$20,D1
+	ENDC
+	BRA.S	NoEsNTSC
+.agcntsc:
+	ENDC
+	ENDC
 	TST.B	$0F(A5)			; Frecuencia pantalla.
 	BNE.S	NoEsNTSC
 	MOVE.W	#$20,D1
@@ -509,17 +572,26 @@ NoEsNTSC:MOVE.W	D1,$DFF1DC
 	JSR	RtgMenuPlay		; RTG play screen failed with the menu on RTG: no start
 	TST.L	D0
 	BEQ.S	.rtgok
+	IFEQ	DispOff
+	BSR	DispSync		; RTG is off now: the gadget says AGA
+	ENDC
 	LEA	tErRtgScr,A0
 	BRA	ImpError
 .rtgok:
 	ENDC
 	JSR	EmulatorStart
+	IFEQ	DispOff
+	JSR	RtgCurtainOff		; (AGA play with the menu on RTG)
+	ENDC
 	ENDC
 ; -=-=-
 	BSR	RefrescaReloj
 ; -=-=-
 	IFEQ	NO_BRAMSAVE
 	BSR	BramSave
+	IFEQ	NO_MENU2
+	BSR	BramAfter		; the Backup RAM text
+	ENDC
 	ENDC
 
 	TST.B	DesborPILA			; *\*\*  POR QUITAR  */*/*
@@ -560,6 +632,9 @@ Eject:
 
 	MOVE.L	#tTipoROM,MainMenuText9+$C		; 'ROM:' ----
 	MOVE.L	#MainMenuIText12,MainMenuText12+$C		; No Cart Inserted.
+	IFEQ	NO_MENU2|NO_BRAMSAVE
+	MOVE.L	#tBramDash,MainMenuText11+$C
+	ENDC
 
 
 	MOVE.L	InsReqBase,A2
@@ -802,6 +877,9 @@ InCalRom1:
 	MOVE.L	4(A2),A0
 	LEA	tNomFileCart,A1
 	BSR	PONOM
+	IFEQ	NO_MENU2|NO_BRAMSAVE
+	BSR	BramFind		; the Backup RAM text: is there a save for this game?
+	ENDC
 
 	move.l  _IntuitionBase,a6
 	move.l  MainMenuWnd,a0
@@ -950,11 +1028,21 @@ MenuAutoRun:
 	BNE.S	.cp
 	BSR	DisMouse
 	BSR	InsertLoad
+	IFNE	MenuAutoIns		; test builds: stop after the first Insert (the menu as it is then)
+	BRA.S	.end
+	ENDC
+	IFNE	DispAlt			; test builds: Display AGA, RTG, AGA ...
+	MOVEQ	#1,D0
+	AND.W	MenuAutoTrips,D0
+	MOVE.W	#GD_INTER,D1
+	BSR	SetCycle
+	BSR	DispSel
+	ENDC
 	BSR	PowerON
 	ADDQ.W	#1,MenuAutoTrips
 	CMP.W	#MenuAutoMax,MenuAutoTrips
 	BCS.S	.trip
-	MOVE.L	#"end ",MenuAutoTxt+7
+.end:	MOVE.L	#"end ",MenuAutoTxt+7
 	BSR	MenuAutoNote
 .ret:	RTS
 
@@ -1053,7 +1141,11 @@ tTipoROM7:	DC.B	"2048Kb",0
 
 tNomCart:	DC.B	"----------------",0
 tManufNoID:	DC.B	"---------------",0
+	IFEQ	NO_MENU2
+tNomFileCart:	DC.B    'No Cartridge Inserted!   ',0,0,0	; 25 = the field
+	ELSE
 tNomFileCart:	DC.B    'No Cartridge Inserted!           ',0,0,0
+	ENDC
 
 	CNOP	0,4
 
@@ -1074,6 +1166,7 @@ tNomFileCart:	DC.B    'No Cartridge Inserted!           ',0,0,0
 ; ------------------------------------------
 
 	CNOP	0,8
+	IFNE	NO_MENU2
 ImpJoyType:
 	MOVE.B	([MainMenuGadgets+(GD_JoyType*4)],$57.w),D0	; JoyType
 	AND.W	#$0003,D0
@@ -1095,6 +1188,39 @@ TabGfxJoyType:
 	DC.L	GBTeclado
 	DC.L	GBCD32
 	DC.L	GBJoypad
+	ELSE
+; ImpJoyType: the pictures of both ports' pad types (and again when one is changed).
+ImpJoyType:
+	LEA	MainMenuPunts,A0
+	MOVE.W	#GD_JoyPort,D1		; port 1
+	MOVEQ	#0,D0
+	BSR	GetGadgetValue
+	MOVE.L	#252,D2
+	BSR.S	.one
+	LEA	MainMenuPunts,A0
+	MOVE.W	#GD_JoyType,D1		; port 2
+	MOVEQ	#1,D0
+	BSR	GetGadgetValue
+	MOVE.L	#534,D2
+.one:	AND.W	#$0003,D0
+	MOVE.L	(TabGfxPort.w,PC,D0.w*4),DirJoyTypePic
+	MOVE.L	D2,D0
+	MOVE.L	#143,D1
+	move.l  Scr,a0
+	move.l  40(a0),a1
+	ADD.w  4(a1),D1
+	MOVE.L	MainMenuWnd,A0
+	MOVE.L	50(A0),A0
+	LEA	DatsJoyTypePic,A1
+	MOVE.L	_IntuitionBase,A6
+	TallImgJmp
+	CNOP	0,4
+TabGfxPort:				; the menu's order: none (the keyboard), joystick, CD32 pad, joypad
+	DC.L	GBTeclado
+	DC.L	GBJoyStick
+	DC.L	GBCD32
+	DC.L	GBJoypad
+	ENDC
 
 ; ------------------------------------------
 ; ******************************************
@@ -1106,6 +1232,7 @@ TabGfxJoyType:
 ; -----------------------------------
 
 	CNOP	0,4
+	IFNE	NO_MENU2
 ActuPrefs:
 	LEA	DirPrefs(PC),A5
 
@@ -1188,6 +1315,500 @@ PonPrefs:
 
 	RTS
 
+	ELSE
+; ActuPrefs: the gadgets into the prefs (Power ON, Continue, Save Prefs).
+ActuPrefs:
+	LEA	DirPrefs(PC),A5
+	LEA	MainMenuPunts,A0
+	MOVE.W	#GD_JoyType,D1		; port 2 (prefs $08 in Juan's order: 0 joystick, 1 none)
+	MOVEQ	#1,D0
+	BSR	GetGadgetValue
+	BSR	PortSwap
+	MOVE.B	D0,$08(A5)
+	MOVE.W	#GD_JoyPort,D1		; port 1 (prefs $16 in the menu's order: 0 none, 1 joystick)
+	MOVEQ	#0,D0
+	BSR	GetGadgetValue
+	MOVE.B	D0,$16(A5)
+	MOVE.W	#GD_ScrMode,D1
+	MOVEQ	#0,D0
+	BSR	GetGadgetValue
+	IFNE	AGC
+	TST.B	AgcWant			; the colour program: Screen and Display are fixed, the saved ones stay
+	BNE.S	.agc
+	ENDC
+	MOVE.B	D0,$0F(A5)		; Screen
+	IFEQ	DispOff
+	IFEQ	AGC
+	MOVE.B	RtgWant,$17(A5)		; Display (0 AGA, else RTG)
+	ENDC
+	ENDC
+.agc:
+	MOVE.L	InsReqBase(PC),D0	; the requester's drawer
+	BEQ.S	.nd
+	MOVE.L	D0,A0
+	MOVE.L	8(A0),A0
+	LEA	$20(A5),A1
+	MOVE.W	#($100/8)-1,D0
+.c:	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	DBF	D0,.c
+.nd:	RTS
+
+; PortSwap: D0 = a pad type, the menu's order <-> prefs $08's (0 and 1 swapped).
+PortSwap:
+	CMP.B	#2,D0
+	BHS.S	.x
+	EOR.B	#1,D0
+.x:	RTS
+
+; PonPrefs: the prefs into the gadgets' tags (the window is not open yet).
+PonPrefs:
+	LEA	DirPrefs(PC),A5
+	IFEQ	ScanOff
+	JSR	RtgScanMenu		; ToolType / CLI SCANLINES= over the prefs
+	ENDC
+	MOVEQ	#0,D0
+	MOVE.B	$08(A5),D0		; port 2
+	AND.W	#3,D0
+	BSR	PortSwap
+	MOVE.L	D0,D2
+	MOVE.W	#GD_JoyType,D0
+	BSR	PonCycle
+	MOVEQ	#0,D2
+	MOVE.B	$16(A5),D2		; port 1
+	AND.W	#3,D2
+	MOVE.W	#GD_JoyPort,D0
+	BSR	PonCycle
+	MOVEQ	#0,D2
+	MOVE.B	$0F(A5),D2		; Screen
+	AND.W	#1,D2
+	IFNE	AGC
+	TST.B	AgcWant			; AGA colour mode: ghosted, NTSC (with the debug rows PAL: ContinueCon)
+	BEQ.S	.scr
+	MOVEQ	#1,D2
+	MOVE.W	#GD_ScrMode,D0
+	MOVE.L	#$8003000E,D1		; GA_Disabled
+	BSR	PonTag
+	MOVEQ	#1-DbgRows,D2
+.scr:
+	ENDC
+	MOVE.W	#GD_ScrMode,D0
+	BSR	PonCycle
+	IFEQ	DispOff
+	MOVEQ	#0,D2
+	TST.B	RtgWant			; Display: RtgStart decided (prefs, ToolType / CLI word RTG, P96 there)
+	BEQ.S	.d
+	MOVEQ	#1,D2
+.d:	MOVE.W	#GD_INTER,D0
+	BSR	PonCycle
+	MOVEQ	#0,D2
+	TST.B	RtgAvail
+	SEQ	D2			; ghosted without P96
+	IFNE	AGC
+	ST	D2			; the colour program: AGA colour or RTG as started (RTG word), ghosted
+	ENDC
+	MOVE.W	#GD_INTER,D0
+	MOVE.L	#$8003000E,D1
+	BSR	PonTag
+	IFEQ	ScanOff
+	MOVEQ	#0,D2
+	MOVE.B	$15(A5),D2		; Scanlines
+	AND.W	#7,D2
+	LEA	ScanMap(PC),A0
+	MOVE.B	(A0,D2.W),D2
+	MOVE.W	#GD_Refresh,D0
+	BSR	PonCycle
+	MOVEQ	#0,D2
+	TST.B	RtgWant
+	SEQ	D2			; ghosted on AGA
+	MOVE.W	#GD_Refresh,D0
+	MOVE.L	#$8003000E,D1
+	BSR	PonTag
+	ENDC
+	ENDC
+	RTS
+PonCycle:
+	MOVE.L	#$8008000F,D1		; GTCY_Active
+PonTag:
+	LEA	MainMenuPunts,A0
+	LEA	MainMenuGTags,A1
+	BRA	OverrideTag
+
+ScanMap:				; Scanlines gadget position <-> prefs $15 (the same both ways)
+	IFEQ	NO_BLENDLV
+	DC.B	0,1,2,3,5,4,6,0
+	ELSE
+	DC.B	0,1,2,3,4,0,0,0
+	ENDC
+
+; SetCycle: D1 = gadget, D0 = its setting (MainMenuValues and the gadget on screen).
+	CNOP	0,4
+SetCycle:
+	MOVEM.L	D0-D1/A2-A3/A6,-(SP)
+	LEA	MainMenuPunts,A0
+	BSR	SetGadgetValue
+	MOVEM.L	(SP),D0-D1
+	MOVE.L	D0,.tg+4
+	LEA	MainMenuGadgets,A0
+	MOVE.L	(A0,D1.W*4),A0
+	MOVE.L	MainMenuWnd,A1
+	IFEQ	ChoosOff
+	BSR	ChooserIs
+	BNE.S	.gt
+	MOVE.L	#$85001005,D1		; CHOOSER_Selected
+	BSR	ChooserSet
+	BRA.S	.cs
+.gt:
+	ENDC
+	SUB.L	A2,A2
+	LEA	.tg(PC),A3
+	MOVE.L	_GadToolsBase(PC),A6
+	JSR	-$2A(A6)		; GT_SetGadgetAttrsA
+.cs:	MOVEM.L	(SP)+,D0-D1/A2-A3/A6
+	RTS
+	CNOP	0,4
+.tg:	DC.L	$8008000F,0,0,0
+
+	IFEQ	DispOff
+; DispSel: the Display gadget (AGA / RTG for the next Power ON).
+DispSel:
+	LEA	MainMenuPunts,A0
+	MOVE.W	#GD_INTER,D1
+	MOVEQ	#0,D0
+	BSR	GetGadgetValue
+	IFEQ	ChoosOff
+	MOVEQ	#0,D1
+	TST.B	RtgWant
+	BEQ.S	.w
+	MOVEQ	#1,D1
+.w:	CMP.W	D1,D0
+	BEQ.S	.same			; the same setting picked again: Continue stays
+	ENDC
+	JSR	RtgSelect		; D0 = what is in effect
+	BSR.S	DispShow
+	LEA	MainMenuGadgets+(GD_Continue*4),A0	; a game started on the other display: Power ON again
+	MOVE.L	MainMenuWnd,A1
+	MOVEQ	#1,D0
+	BRA	GadsOnOff
+	IFEQ	ChoosOff
+.same:	RTS
+	ENDC
+; DispSync: the gadget after RTG was turned off (the RTG play screen did not open).
+DispSync:
+	MOVEQ	#0,D0
+	TST.B	RtgWant
+	BEQ.S	DispShow
+	MOVEQ	#1,D0
+; DispShow: D0 = 0 AGA / 1 RTG on the Display gadget; Scanlines only with RTG.
+DispShow:
+	MOVE.L	D0,-(SP)
+	MOVE.W	#GD_INTER,D1
+	BSR	SetCycle
+	IFEQ	ScanOff
+	MOVE.L	(SP),D0
+	SEQ	D0
+	AND.L	#1,D0			; 1 = ghosted
+	LEA	MainMenuGadgets+(GD_Refresh*4),A0
+	MOVE.L	MainMenuWnd,A1
+	BSR	GadsOnOff
+	ENDC
+	ADDQ.L	#4,SP
+	RTS
+	ENDC
+
+	IFEQ	ScanOff
+; ScanSel: the Scanlines gadget (the next Power ON / Continue on RTG).
+ScanSel:
+	LEA	MainMenuPunts,A0
+	MOVE.W	#GD_Refresh,D1
+	MOVEQ	#0,D0
+	BSR	GetGadgetValue
+	AND.W	#7,D0
+	LEA	ScanMap(PC),A0
+	MOVE.B	(A0,D0.W),DirPrefs+$15
+	RTS
+	ENDC
+	ENDC
+
+	IFEQ	ChoosOff
+; The menu's settings as chooser.gadget pop-up lists (OS 3.5 and up). When the window is made
+; (GadToolsBox.asm) a cycle gadget's box, labels, setting and ghosting go to a chooser instead
+; (ChooserPre), and the GadTools gadget left behind is a text gadget one pixel wide that only
+; draws the label. MainMenuGadgets holds the chooser, so the handlers stay as they were.
+; Without chooser.gadget everything is as before.
+
+; ChooserPre: D0 = the gadget's kind, D3 = its number, A4 = its tags, BufNewGad = its box.
+; Returns D0 = the kind to make with GadTools (TEXT_KIND when a chooser was made).
+ChooserPre:
+	IFD	ChooDbg
+	ADDQ.L	#1,ChooDbgV+4
+	MOVE.L	_ChooserBase,ChooDbgV
+	ENDC
+	CMP.W	#7,D0			; CYCLE_KIND
+	BNE	.r
+	IFD	ChooDbg
+	ADDQ.L	#1,ChooDbgV+8
+	ENDC
+	TST.L	_ChooserBase
+	BEQ	.r
+	MOVEM.L	D1-D4/A0-A2/A6,-(SP)
+	MOVEQ	#0,D2			; setting
+	MOVEQ	#0,D4			; ghosted
+	SUB.L	A2,A2			; labels
+	MOVE.L	A4,A0
+.t:	MOVE.L	(A0)+,D1
+	BEQ.S	.td
+	MOVE.L	(A0)+,D0
+	CMP.L	#$8008000F,D1		; GTCY_Active
+	BNE.S	.t1
+	MOVE.L	D0,D2
+	BRA.S	.t
+.t1:	CMP.L	#$8003000E,D1		; GA_Disabled
+	BNE.S	.t2
+	MOVE.L	D0,D4
+	BRA.S	.t
+.t2:	CMP.L	#$8008000E,D1		; GTCY_Labels
+	BNE.S	.t
+	MOVE.L	D0,A2
+	BRA.S	.t
+.td:	MOVE.L	A2,D0
+	BEQ	.no
+	LEA	ChooserLists,A0		; this gadget's list of chooser nodes
+	MOVE.L	D3,D1
+	MULU	#12,D1
+	ADD.L	D1,A0
+	LEA	4(A0),A1		; NewList
+	MOVE.L	A1,(A0)
+	CLR.L	4(A0)
+	MOVE.L	A0,8(A0)
+	MOVE.L	A0,ChoTags+44
+	MOVE.L	A0,-(SP)
+.n:	MOVE.L	(A2)+,D0
+	BEQ.S	.nd
+	MOVE.L	D0,CnaTags+4
+	LEA	CnaTags(PC),A0
+	MOVE.L	_ChooserBase,A6
+	JSR	-36(A6)			; AllocChooserNodeA
+	TST.L	D0
+	BEQ.S	.nd
+	MOVE.L	(SP),A0
+	MOVE.L	D0,A1
+	MOVE.L	4.W,A6
+	JSR	-246(A6)		; AddTail
+	BRA.S	.n
+.nd:	ADDQ.L	#4,SP
+	LEA	BufNewGad,A1
+	MOVE.W	(A1),D0
+	EXT.L	D0
+	MOVE.L	D0,ChoTags+4		; GA_Left
+	MOVE.W	2(A1),D0
+	EXT.L	D0
+	MOVE.L	D0,ChoTags+12		; GA_Top
+	MOVE.W	4(A1),D0
+	EXT.L	D0
+	MOVE.L	D0,ChoTags+20		; GA_Width
+	MOVE.W	6(A1),D0
+	EXT.L	D0
+	MOVE.L	D0,ChoTags+28		; GA_Height
+	MOVEQ	#0,D0
+	MOVE.W	16(A1),D0
+	MOVE.L	D0,ChoTags+36		; GA_ID
+	MOVE.L	D2,ChoTags+52		; CHOOSER_Selected
+	MOVE.L	D4,ChoTags+60		; GA_Disabled
+	MOVE.L	_ChooserBase,A6
+	JSR	-30(A6)			; CHOOSER_GetClass
+	MOVE.L	D0,A0
+	SUB.L	A1,A1
+	LEA	ChoTags(PC),A2
+	MOVE.L	_IntuitionBase,A6
+	JSR	-636(A6)		; NewObjectA
+	IFD	ChooDbg
+	MOVE.L	D0,ChooDbgV+12
+	ENDC
+	LEA	ChooserObjs,A0
+	MOVE.L	D0,(A0,D3.W*4)
+	BEQ.S	.no			; no chooser: the cycle gadget
+	MOVE.W	#1,BufNewGad+4		; the GadTools gadget: the label only
+	MOVEM.L	(SP)+,D1-D4/A0-A2/A6
+	MOVEQ	#13,D0			; TEXT_KIND
+	RTS
+.no:	MOVEM.L	(SP)+,D1-D4/A0-A2/A6
+	MOVEQ	#7,D0
+.r:	RTS
+
+; ChooserPost: A0 = MainMenuGadgets' entry for gadget D3: the chooser when there is one.
+ChooserPost:
+	MOVE.L	A1,-(SP)
+	LEA	ChooserObjs,A1
+	MOVE.L	(A1,D3.W*4),D0
+	BEQ.S	.x
+	MOVE.L	D0,(A0)
+.x:	MOVE.L	(SP)+,A1
+	RTS
+
+; ChooserAdd: the choosers into the open window (MainMenuWnd), drawn.
+ChooserAdd:
+	MOVEM.L	D0-D2/A0-A2/A6,-(SP)
+	IFD	ChooDbg
+	MOVEM.L	D0-D4/A0-A1/A6,-(SP)
+	MOVE.L	_DosBase,A6
+	MOVE.L	#.dn,D1
+	MOVE.L	#1006,D2
+	JSR	-30(A6)
+	MOVE.L	D0,D4
+	BEQ.S	.dx
+	MOVE.L	D4,D1
+	MOVE.L	#ChooDbgV,D2
+	MOVEQ	#16,D3
+	JSR	-48(A6)
+	MOVE.L	D4,D1
+	JSR	-36(A6)
+.dx:	MOVEM.L	(SP)+,D0-D4/A0-A1/A6
+	BRA.S	.dgo
+.dn:	DC.B	"PROGDIR:chooser.bin",0
+	EVEN
+.dgo:
+	ENDC
+	MOVE.L	_IntuitionBase,A6
+	MOVEQ	#MainMenu_CNT-1,D2
+	LEA	ChooserObjs,A2
+.l:	MOVE.L	(A2)+,D0
+	BEQ.S	.n
+	MOVE.L	MainMenuWnd,A0
+	MOVE.L	D0,A1
+	MOVEQ	#-1,D0
+	JSR	-42(A6)			; AddGadget
+	MOVE.L	-4(A2),A0
+	MOVE.L	MainMenuWnd,A1
+	MOVE.L	A2,-(SP)
+	SUB.L	A2,A2
+	MOVEQ	#1,D0
+	JSR	-432(A6)		; RefreshGList
+	MOVE.L	(SP)+,A2
+.n:	DBF	D2,.l
+	MOVEM.L	(SP)+,D0-D2/A0-A2/A6
+	RTS
+
+; ChooserRem: the choosers out of the window before it closes.
+ChooserRem:
+	MOVEM.L	D0-D2/A0-A2/A6,-(SP)
+	MOVE.L	_IntuitionBase,A6
+	MOVEQ	#MainMenu_CNT-1,D2
+	LEA	ChooserObjs,A2
+.l:	MOVE.L	(A2)+,D0
+	BEQ.S	.n
+	MOVE.L	MainMenuWnd,A0
+	MOVE.L	D0,A1
+	JSR	-228(A6)		; RemoveGadget
+.n:	DBF	D2,.l
+	MOVEM.L	(SP)+,D0-D2/A0-A2/A6
+	RTS
+
+; ChooserFree: the choosers and their lists (after the window and the GadTools gadgets).
+ChooserFree:
+	MOVEM.L	D0-D2/A0-A2/A6,-(SP)
+	MOVEQ	#MainMenu_CNT-1,D2
+	LEA	ChooserObjs,A2
+.l:	MOVE.L	(A2),D0
+	BEQ.S	.n
+	CLR.L	(A2)
+	MOVE.L	D0,A0
+	MOVE.L	_IntuitionBase,A6
+	JSR	-642(A6)		; DisposeObject
+.n:	ADDQ.L	#4,A2
+	DBF	D2,.l
+	MOVEQ	#MainMenu_CNT-1,D2
+	LEA	ChooserLists,A2
+.ll:	TST.L	(A2)			; never made: nothing in it
+	BEQ.S	.ln
+.f:	MOVE.L	A2,A0
+	MOVE.L	4.W,A6
+	JSR	-258(A6)		; RemHead
+	TST.L	D0
+	BEQ.S	.ln
+	MOVE.L	D0,A0
+	MOVE.L	_ChooserBase,A6
+	JSR	-42(A6)			; FreeChooserNode
+	BRA.S	.f
+.ln:	LEA	12(A2),A2
+	DBF	D2,.ll
+	MOVEM.L	(SP)+,D0-D2/A0-A2/A6
+	RTS
+
+; ChooserIs: A0 = a gadget. Z set when it is one of the choosers.
+ChooserIs:
+	MOVEM.L	D0/A1,-(SP)
+	LEA	ChooserObjs,A1
+	MOVEQ	#MainMenu_CNT-1,D0
+.l:	CMPA.L	(A1)+,A0
+	DBEQ	D0,.l
+	MOVEM.L	(SP)+,D0/A1		; (the flags stay)
+	RTS
+
+; ChooserSet: A0 = a chooser, A1 = its window, D1 = a tag, D0 = its data. Set and drawn.
+ChooserSet:
+	MOVEM.L	D0-D1/A0-A3/A6,-(SP)
+	LEA	.tg(PC),A3
+	MOVE.L	D1,(A3)
+	MOVE.L	D0,4(A3)
+	SUB.L	A2,A2
+	MOVE.L	_IntuitionBase,A6
+	JSR	-660(A6)		; SetGadgetAttrsA
+	MOVEM.L	8(SP),A0-A1
+	SUB.L	A2,A2
+	MOVEQ	#1,D0
+	JSR	-432(A6)		; RefreshGList
+	MOVEM.L	(SP)+,D0-D1/A0-A3/A6
+	RTS
+	CNOP	0,4
+.tg:	DC.L	0,0,0
+
+; ChooserCode: IDCMP_GADGETUP, D1 = the gadget, D3 = its number in the window: when it is a
+; chooser, D2 = its setting (CHOOSER_Selected).
+ChooserCode:
+	CMP.W	#MainMenu_CNT,D3
+	BCC.S	.r
+	MOVEM.L	D0-D1/A0-A1/A6,-(SP)
+	LEA	ChooserObjs,A0
+	MOVE.L	(A0,D3.W*4),D0
+	BEQ.S	.x
+	CMP.L	D1,D0
+	BNE.S	.x
+	MOVE.L	D0,A0
+	LEA	.v(PC),A1
+	MOVE.L	#$85001005,D0		; CHOOSER_Selected
+	MOVE.L	_IntuitionBase,A6
+	JSR	-654(A6)		; GetAttr
+	MOVE.L	.v(PC),D2
+.x:	MOVEM.L	(SP)+,D0-D1/A0-A1/A6
+.r:	RTS
+	CNOP	0,4
+.v:	DC.L	0
+
+	CNOP	0,4
+ChoTags:
+	DC.L	$80030001,0		; GA_Left
+	DC.L	$80030003,0		; GA_Top
+	DC.L	$80030005,0		; GA_Width
+	DC.L	$80030007,0		; GA_Height
+	DC.L	$80030010,0		; GA_ID
+	DC.L	$85001004,0		; CHOOSER_Labels
+	DC.L	$85001005,0		; CHOOSER_Selected
+	DC.L	$8003000E,0		; GA_Disabled
+	DC.L	$80030016,1		; GA_RelVerify
+	DC.L	$80030028,topaz8	; GA_TextAttr
+	DC.L	$85001001,1		; CHOOSER_PopUp
+	DC.L	$8500100D,1		; CHOOSER_Justification: centred (as the cycle gadgets)
+	DC.L	0
+CnaTags:
+	DC.L	$85001501,0,0		; CNA_Text
+ChooserObjs:	DCB.L	MainMenu_CNT,0
+	IFD	ChooDbg
+ChooDbgV:	DC.L	0,0,0,0
+	ENDC
+ChooserLists:	DCB.B	MainMenu_CNT*12,0
+	ENDC
+
 ; -----------------------------------
 
 LoadPrefs:
@@ -1246,6 +1867,9 @@ BramLoad:
 
 	CNOP	0,4
 BramSave:
+	IFEQ	NO_MENU2
+	SF	BramWrote
+	ENDC
 	TST.B	BramName
 	BEQ.S	.ret
 	LEA	SRAM,A0
@@ -1269,6 +1893,9 @@ BramSave:
 	BSR	WriteFile
 	BNE.S	.err
 	BSR	CloseFile
+	IFEQ	NO_MENU2
+	ST	BramWrote
+	ENDC
 	LEA	SRAM,A0
 	LEA	BramDisk,A1
 	MOVE.W	#((8*1024)/4)-1,D0
@@ -1341,6 +1968,55 @@ BramMkName:
 	CLR.B	(A2)
 .ret:	RTS
 .digits:	DC.B	"0123456789abcdef"
+
+	IFEQ	NO_MENU2
+; The Backup RAM text in the menu: BramFind after Insert, BramAfter back from play, the ROM
+; size, this text and the file name printed again (MainMenuText9's chain).
+BramFind:
+	BSR	BramMkName
+	LEA	tBramNone(PC),A0
+	TST.B	BramName
+	BEQ.S	.set
+	MOVE.L	#BramName,D1
+	MOVEQ	#-2,D2			; ACCESS_READ
+	MOVE.L	_DosBase,A6
+	JSR	-84(A6)			; Lock (A0 is not kept: the text is picked after it)
+	MOVE.L	D0,D1
+	BEQ.S	.none
+	JSR	-90(A6)			; UnLock
+	LEA	tBramFound(PC),A0
+	BRA.S	.set
+.none:	LEA	tBramNone(PC),A0
+.set:	MOVE.L	A0,MainMenuText11+$C
+	RTS
+BramAfter:
+	LEA	tBramSaved(PC),A0
+	TST.B	BramWrote
+	BNE.S	.set
+	LEA	tBramLoaded(PC),A0
+	TST.B	BramGot
+	BNE.S	.set
+	LEA	tBramNone(PC),A0
+.set:	MOVE.L	A0,MainMenuText11+$C
+PrintCartTexts:
+	move.l  _IntuitionBase,a6
+	move.l  MainMenuWnd,a0
+	move.b  54(a0),d0
+	ext.w   d0
+	move.b  55(a0),d1
+	ext.w   d1
+	move.l  50(a0),a0
+	lea	MainMenuText9,a1
+	TallITextM
+	RTS
+tBramDash:	DC.B	"-                        ",0
+tBramNone:	DC.B	"No save file yet         ",0
+tBramFound:	DC.B	"Save file found          ",0
+tBramLoaded:	DC.B	"Save file loaded         ",0
+tBramSaved:	DC.B	"Game saved (Saves drawer)",0
+BramWrote:	DC.B	0
+	EVEN
+	ENDC
 BramDir:	DC.B	"PROGDIR:Saves",0
 BramGot:	DC.B	0
 	EVEN
@@ -1379,7 +2055,11 @@ NOMPREFS:
 	CNOP	0,8
 DirPrefs:
 	DC.B	"AmiNFv01"	; $00 - ID
+	IFEQ	NO_MENU2
+	DC.B	$00		; $08 - port 2's pad (0 joystick, 1 none, 2 CD32 pad, 3 joypad)
+	ELSE
 	DC.B	$01		; $08 - JoyType
+	ENDC
 	DC.B	$FF		; $09 - Black Border
 	DC.B	$00		; $0A - Ask for Reset
 	DC.B	$00		; $0B - Auto-load Battery
@@ -1400,9 +2080,9 @@ DirPrefs:
 	ELSE
 	DC.B	$00		; $15 -
 	ENDC
-	DC.B	$00		; $16 - 
+	DC.B	$00		; $16 - port 1's pad (NO_MENU2=0: 0 none, 1 joystick, 2 CD32 pad, 3 joypad)
 
-	DC.B	$00		; $17
+	DC.B	$00		; $17 - Display (NO_MENU2=0: 0 AGA, else RTG)
 	DC.L	$00		; $18
 	DC.L	$00		; $1C
 
@@ -1911,6 +2591,13 @@ TxtPrint:
 GadsOnOff:
 	MOVE.L	D0,OnOffTAGS+4
 	MOVE.L	(A0),A0
+	IFEQ	ChoosOff
+	BSR	ChooserIs
+	BNE.S	.gt
+	MOVE.L	#$8003000E,D1		; GA_Disabled
+	BRA	ChooserSet
+.gt:
+	ENDC
 	SUB.L	A2,A2
 	LEA	OnOffTAGS(PC),A3
 	MOVE.L	_GadToolsBase(PC),A6
@@ -2206,6 +2893,9 @@ ControlGadgetUp:
 	BMI	ControlLoop
 
 
+	IFEQ	ChoosOff
+	BSR	ChooserCode	; a chooser: D2 = its setting
+	ENDC
 	MOVE.L	4(SP),A0	; ***Punts
 	MOVE.W	D2,D0
 	MOVE.W	D3,D1
@@ -2306,6 +2996,22 @@ GetGadgetValue:
 
 
 	CNOP	0,4
+	IFEQ	NO_MENU2
+PunterosMenu:
+	DC.L	MenuProject
+	DC.L	MenuCartridges
+	DC.L	0,0
+MenuProject:
+	DC.L	About			; About
+	DC.L	HelpPage		; Help Page
+	DC.L	ControlRET		; -----
+	DC.L	SavePrefs		; Save Prefs
+	DC.L	ControlRET		; -----
+	DC.L	ControlSalir		; Quit
+MenuCartridges:
+	DC.L	Insert			; Insert Cartridge
+	DC.L	Eject			; Eject  Cartridge
+	ELSE
 PunterosMenu:
 	DC.L	MenuProject
 	DC.L	MenuCartridges
@@ -2380,6 +3086,8 @@ SubMenuScan:
 ; <=-------------------------------------------------------=>
 ; <=-------------------------------------------------------=>
 
+	ENDC
+
 	CNOP	0,8
 MCeros:	DS.L	16
 
@@ -2409,11 +3117,24 @@ MainMenuPunts:
 	DC.L	GD_Exit,ControlSalir
 	DC.L	GD_JoyType,ImpJoyType
 	DC.L	GD_HelpPage,HelpPage
+	IFEQ	NO_MENU2
+	DC.L	GD_JoyPort,ImpJoyType
+	IFEQ	DispOff
+	DC.L	GD_INTER,DispSel
+	IFEQ	ScanOff
+	DC.L	GD_Refresh,ScanSel
+	ENDC
+	ENDC
+	ENDC
 	DC.L	0,0
 MainMenuValues:
 	DC.W	GD_JoyType,0
 	DC.W	GD_JoyPort,0
 	DC.W	GD_ScrMode,0
+	IFEQ	NO_MENU2
+	DC.W	GD_INTER,0
+	DC.W	GD_Refresh,0
+	ENDC
 	DC.W	-1,-1
 
 

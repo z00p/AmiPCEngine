@@ -1212,8 +1212,15 @@ PSGDdaBusy:
 	BNE.S	.yes
 	TST.B	(PSGDdaLive.L,D6.W)
 	BEQ.S	.no
+	IFEQ	NO_DDAGAP
+	MOVE.B	(PSGBuffer+4.L,D6.W*8),D0
+	AND.B	#$C0,D0
+	CMP.B	#$80,D0			; on as a tone: the stream has ended (off: a gap, keep the voice)
+	BEQ.S	.no
+	ELSE
 	BTST	#6,(PSGBuffer+4.L,D6.W*8)
 	BEQ.S	.no
+	ENDC
 .yes:	MOVEQ	#1,D0
 	RTS
 .no:	MOVEQ	#0,D0

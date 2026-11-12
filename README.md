@@ -10,6 +10,7 @@ No games are included. Bring HuCard images you may legally have.
 ![The menu on an RTG screen](docs/shots/2026-10-31-menu-rtg.png)
 ![PCE Invaders, a homebrew game](docs/shots/2026-10-27-pce-invaders-title.png)
 ![Santatlantean, a homebrew game, on an RTG screen](docs/shots/2026-10-31-rtg-santatlantean.png)
+![The AGA picture: 64 games, 30 HuCards and 34 homebrew, in WinUAE, each picture read back from the Amiga's AGA screen memory](docs/shots/2026-11-10-aga-colour-64.png)
 
 ## History
 
@@ -31,15 +32,16 @@ full speed on an A1200 with a PiStorm. What changed is in
 
 ## Running it
 
-The release archive holds the AmiPCEngine drawer: the program, an icon
-for the AGA video output, an icon for the RTG screen (ToolType `RTG`),
-`ReadMe.txt` and an empty `Homebrew` drawer for your `.pce` files. The
+The release archive holds the AmiPCEngine drawer: AGA (the AGA video
+output, with the PC Engine's own colours), RTG (the same program on a
+Picasso96 screen, ToolType `RTG`), `ReadMe.txt` and an empty `Homebrew`
+drawer for your `.pce` files. It needs a fast machine: an A1200 with a
+PiStorm, a fast 68060 or similar. The
 manual is [docs/package/ReadMe.txt](docs/package/ReadMe.txt): requirements,
 the menu, keys and pads, and the limits.
 
-Tested by us on an A1200 with a PiStorm (RTG for speed, sound and the
-picture; AGA less so) and in WinUAE, including a 68030/50 setting. Not
-tested on a real 68030, 68040 or 68060 card. Not all games work. Not
+Tested by us on an A1200 with a PiStorm (RTG and AGA) and in WinUAE. Not
+tested on a real 68060 card. Not all games work. Not
 supported: CD-ROM games, SuperGrafx.
 
 ## Building
@@ -52,15 +54,17 @@ supported: CD-ROM games, SuperGrafx.
   `src/buildinfo.i` (the date and commit in the window title; needs git).
   `sh build.sh release` makes the release build (the window title from the
   source, `-DNO_BUILDINFO=1`); `sh build.sh debug` the same with the debug
-  rows, as `build/AmiPCEngine_Debug`.
+  rows, as `build/AmiPCEngine_Debug`. `sh build.sh colour` makes
+  the program that ships (`-DAGC=1`: the AGA picture in the PC Engine's own
+  colours; RTG with the word `RTG`).
 - The vasm line, for reference:
   `vasmm68k_mot -devpac -nocase -m68020 -Fhunkexe -nosym -maxerrors=0 -o AmiPCEngine Build.asm`
   run inside `src/`.
 - Debug and test code sits behind assembly switches (`-DName=1`), off by
   default. The switch block is at the top of `src/Main.asm`. `-DDbgRows=1`
   draws timing rows at the top of the screen
-  (see `docs/package/Debug rows.txt` in the archive).
-- Release package: `python tools/make_release.py --build --version 1.4`
+  (see `docs/package/Debug rows.txt`).
+- Release package: `python tools/make_release.py --build --version 2.0`
   builds the release binary and stages the drawer; the archive is made with
   the Amiga's own `lha`.
 
@@ -68,7 +72,7 @@ supported: CD-ROM games, SuperGrafx.
 
 | Path | What |
 |---|---|
-| `src/` | the source: `Main.asm` (start-up, screen, input), `CPU.asm` (HuC6280), `PCE.asm` (frame and line loop, VDC interrupts), `IO.asm` (I/O page: VDC, VCE, PSG, timer, pad), `VDP_AGA.asm` (AGA renderer), `RTG.asm` (RTG renderer), `PSG.asm` (sound on Paula), `Menu.asm`, `GadToolsBox.asm` |
+| `src/` | the source: `Main.asm` (start-up, screen, input), `AGC.asm` (the AGA picture in the PC Engine's colours), `CPU.asm` (HuC6280), `PCE.asm` (frame and line loop, VDC interrupts), `IO.asm` (I/O page: VDC, VCE, PSG, timer, pad), `VDP_AGA.asm` (AGA renderer), `RTG.asm` (RTG renderer), `PSG.asm` (sound on Paula), `Menu.asm`, `GadToolsBox.asm` |
 | `docs/package/` | the ReadMe that goes in the archive |
 | `docs/shots/` | screenshots |
 | `tools/` | `make_release.py`: builds the release binary and stages the drawer |
@@ -77,14 +81,14 @@ supported: CD-ROM games, SuperGrafx.
 ## Credit
 
 - **AmiPCEngine:** Juan Antonio Gomez Galvez (GUS Entertainment).
-- **Versions 1.0 to 1.4:** z00p.
+- **Versions 1.0 to 2.0:** z00p.
 - **Web and menu graphics:** Multivac.
-- **Thanks:** Zener and Sandman.
+- **Thanks:** Zener and Sandman, and reassembler for his guidance and direction.
 - Menu code made with Devpac III (HiSoft) and GadToolsBox (Jaba Development).
 
 ## Licence
 
-AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 1.4, by
+AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 2.0, by
 z00p, are community updates made and published with his permission. See [NOTICE.md](NOTICE.md).
 
 ## Trademarks

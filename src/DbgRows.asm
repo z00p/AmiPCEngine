@@ -22,6 +22,9 @@
 ;   RTG  (RTG display only) lines composing the frame in fast RAM (RtgFrame:
 ;        background, sprites, changed-line test); BG and SPR are 0 then
 ;   COPY (RTG display only) lines copying the changed lines to the board
+; AGA chunky mode (AGC test builds): the AGA panel, with RTG (composing, colour registers, C2P) in BG's
+; place and COPY (the buffer swap and colour loads) in SPR's; row 1 adds SKIP, pictures not converted
+; because the frame before ran late (DLAY's place).
 ; On RTG the panel (50 characters) is drawn 1:1 on the top 17 lines of the screen
 ; and the picture under it is not copied (on 960x540 it sits in the border; on
 ; 640x480 it covers the top 8 PCE lines).
@@ -37,6 +40,12 @@ DbgInit:
 	MOVE.W	D0,DbgCopPt+6
 	SWAP	D0
 	MOVE.W	D0,DbgCopPt+2
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.ag
+	BSR	DbgAgcPanel
+.ag:
+	ENDC
 	LEA	DbgPanel,A0
 	MOVE.W	#(DbgCols*(DbgRowGap+8))/4-1,D1
 .cl:	CLR.L	(A0)+
@@ -55,6 +64,64 @@ DbgInit:
 	MOVE.L	D0,DbgWinVb
 	MOVEM.L	(SP)+,D0-D1/A0
 	RTS
+
+	IFNE	AGC
+; DbgAgcPanel: AGA chunky mode (DbgInit, after SetPicTop). The panel goes under the picture, in the copper's scroll
+; list (unused with RtgOn), and the one above it is turned into no-ops. With the panel above, the 352-wide picture
+; showed 30 px left with wrong colours in WinUAE (cause not found); this way the frame runs as in the normal build
+; up to the picture's end.
+; PAL: picture to line PicTop+233 ($118), panel on lines $11B-$12B. The panel fetches DDF $28-$C8 (11 longs)
+; from 4 bytes before each row with no delay, so its byte 0 is at H $81, where its window starts.
+; NTSC: the picture runs past the frame's end and there is no panel.
+DbgAgcPanel:
+	MOVEM.L	D0-D1/A0,-(SP)
+	LEA	DbgCopPt,A0
+	MOVE.W	#(DbgCopEnd-DbgCopPt)/4-1,D1
+.n:	MOVE.L	#$01FE0000,(A0)+	; no-op moves
+	DBF	D1,.n
+	MOVE.W	PicTop,D0
+	ADD.W	#233-256,D0		; the picture's first line after (below line 256)
+	LEA	CopperScrolls+AGCWRAP,A0	; after the ring wrap's block (AgcPlanePtrs), which ends past line 255
+	MOVE.B	D0,(A0)+
+	MOVE.B	#$07,(A0)+
+	MOVE.W	#$FFFE,(A0)+
+	MOVE.L	#$01000200,(A0)+	; no planes
+	MOVE.W	#$008E,(A0)+		; DIWSTRT H $81 for the panel lines (the 4 bytes before each row hidden; V never matches)
+	MOVE.W	D0,D1
+	ADDQ.W	#3,D1
+	LSL.W	#8,D1
+	MOVE.B	#$81,D1
+	MOVE.W	D1,(A0)+
+	MOVE.L	#DbgPanel-4,D1
+	SWAP	D1
+	MOVE.W	#$00E0,(A0)+
+	MOVE.W	D1,(A0)+
+	SWAP	D1
+	MOVE.W	#$00E2,(A0)+
+	MOVE.W	D1,(A0)+
+	MOVE.L	#$0108FFFC,(A0)+	; 40 bytes a row, 44 fetched
+	MOVE.L	#$010AFFFC,(A0)+
+	MOVE.L	#$01020000,(A0)+	; no delay
+	MOVE.L	#$00920028,(A0)+	; DDFSTRT $28: 11 longs (the picture fetches 12 from $18)
+	MOVE.L	#$01800113,(A0)+	; register 0 and 1 (bank 0): the panel's colours
+	MOVE.L	#$01820FF8,(A0)+
+	ADDQ.W	#3,D0
+	MOVE.B	D0,(A0)+
+	MOVE.B	#$07,(A0)+
+	MOVE.W	#$FFFE,(A0)+
+	MOVE.L	#$01001200,(A0)+	; 1 plane
+	ADD.W	#17,D0
+	MOVE.B	D0,(A0)+
+	MOVE.B	#$07,(A0)+
+	MOVE.W	#$FFFE,(A0)+
+	MOVE.L	#$01000200,(A0)+
+	MOVE.L	#$01800000,(A0)+	; register 0 black again (the colour block sets 1 and the rest at the frame's top)
+	MOVE.L	#$FFFFFFFE,(A0)+
+	ADDQ.W	#1,D0
+	MOVE.B	D0,Copper+6		; DIWSTOP V: the window open to the panel's end (bit 8 = NOT bit 7)
+	MOVEM.L	(SP)+,D0-D1/A0
+	RTS
+	ENDC
 
 ; DbgTod: D0.W = CIA-B TOD bits 15-0 (lines). Middle byte read twice so a carry
 ; between the two reads is caught; the high byte is not read (it would latch).
@@ -171,6 +238,13 @@ DbgFrame:
 	MOVE.W	DbgWorst,(A1)+
 	MOVE.W	DbgOther,(A1)+
 	MOVE.W	DbgDelay,(A1)+
+	IFNE	AGC
+	TST.B	AgcOn			; AGA chunky mode: SKIP (pictures not converted) in DLAY's place
+	BEQ.S	.nsk
+	MOVE.W	AgcSkipN,-2(A1)
+	CLR.W	AgcSkipN
+.nsk:
+	ENDC
 	IFNE	AutoExit
 	BSR	DbgAutoSum
 	ENDC
@@ -181,6 +255,10 @@ DbgFrame:
 	IFEQ	NO_RTG
 	TST.B	RtgOn
 	BEQ.S	.aga
+	IFNE	AGC
+	TST.B	AgcOn
+	BNE.S	.aga
+	ENDC
 	MOVEQ	#DbgColsR,D3		; RTG: drawn on the screen by RtgCopy
 	LEA	DbgOut+20,A0
 	LEA	DbgPanelR,A1
@@ -209,8 +287,20 @@ DbgFrame:
 	LEA	DbgOut+20,A0
 	LEA	DbgPanel,A1
 	MOVEQ	#3,D1
+	IFNE	AGC
+	TST.B	AgcOn
+	BEQ.S	.ag3
+	MOVEQ	#4,D1			; TOTL WRST OTHR SKIP
+.ag3:
+	ENDC
 	ENDC
 	BSR	DbgRow
+	IFNE	AGC
+	TST.B	AgcOn			; AGA chunky mode: RTG and COPY in the BG and SPR places
+	BEQ.S	.agc0
+	MOVE.L	DbgOut+16,DbgOut+8
+.agc0:
+	ENDC
 	LEA	DbgOut,A0
 	LEA	DbgPanel+DbgCols*DbgRowGap,A1
 	MOVEQ	#8,D1
