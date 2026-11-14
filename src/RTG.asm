@@ -133,6 +133,10 @@ RtgStart:
 	CMP.L	#-1,D0
 	BEQ	.no
 	MOVE.W	D1,RtgNModes
+	IFEQ	NO_RTGMODE
+	MOVE.L	D0,RtgAutoID		; the automatic choice
+	BSR	RtgModeUse		; RTGMODE= or the prefs' mode instead, when it can be used
+	ENDC
 	MOVE.B	#4,RtgStage
 	IFEQ	DispOff
 	ST	RtgAvail		; P96 and a play mode: the menu's Display gadget offers RTG
@@ -284,7 +288,20 @@ RtgToolType:
 	MOVE.L	D0,A0
 	BSR	RtgScanVal
 	ENDC
-.fr:	MOVE.L	D4,A0
+.fr:
+	IFEQ	NO_RTGMODE
+	MOVE.L	D4,A0			; RTGMODE=AUTO|WIDTHxHEIGHT|$ModeID
+	MOVE.L	$36(A0),A0
+	LEA	RtgModeTTNom(PC),A1
+	MOVE.L	D5,A6
+	JSR	-96(A6)			; FindToolType
+	TST.L	D0
+	BEQ.S	.fm
+	MOVE.L	D0,A0
+	BSR	RtgModeVal
+.fm:
+	ENDC
+	MOVE.L	D4,A0
 	MOVE.L	D5,A6
 	JSR	-90(A6)			; FreeDiskObject
 .cl:	MOVE.L	D5,A1
@@ -301,6 +318,9 @@ RtgCliArg:
 	MOVE.L	D0,A0
 	IFEQ	ScanOff
 	BSR	RtgScanCli		; SCANLINES=... (A0 kept)
+	ENDC
+	IFEQ	NO_RTGMODE
+	BSR	RtgModeCli		; RTGMODE=... (A0 kept)
 	ENDC
 	MOVEQ	#0,D2			; 1: the previous character was a letter
 .l:	MOVE.B	(A0)+,D0
@@ -738,6 +758,319 @@ RtgIdAttr:
 	MOVE.L	(SP)+,A6
 	RTS
 
+	IFEQ	NO_RTGMODE
+; The play mode can be chosen: ToolType / CLI RTGMODE=AUTO, WIDTHxHEIGHT or a ModeID in hex ($ or 0x), else the
+; prefs' long $18 (0 = automatic), else RtgFind's choice (RtgAutoID). A mode is used only when RtgModeOK takes it.
+
+; RtgModeUse: RtgStart, after RtgFind (RtgModeID = RtgAutoID). Keeps the registers.
+RtgModeUse:
+	MOVEM.L	D0-D1,-(SP)
+	MOVE.L	RtgModeTT,D0
+	BEQ.S	.pr
+	CMP.L	#1,D0
+	BNE.S	.t2
+	CLR.L	DirPrefs+$18		; RTGMODE=AUTO
+	BRA.S	.x
+.t2:	CMP.L	#2,D0
+	BNE.S	.id
+	BSR	RtgFindWH
+	CMP.L	#-1,D0
+	BEQ.S	.pr
+.id:	BSR	RtgModeOK
+	TST.L	D1
+	BNE.S	.pr
+	MOVE.L	D0,DirPrefs+$18		; kept by Save Prefs (as SCANLINES=)
+	BRA.S	.set
+.pr:	MOVE.L	DirPrefs+$18,D0
+	BEQ.S	.x
+	BSR	RtgModeOK
+	TST.L	D1
+	BNE.S	.x			; not on this machine now: automatic, the prefs kept
+.set:	MOVE.L	D0,RtgModeID
+.x:	BSR	RtgModeTxtMk
+	MOVEM.L	(SP)+,D0-D1
+	RTS
+
+; RtgModeOK: D0 = a ModeID -> D1 = 0 when it can be the play mode (a P96 mode that exists, a 16-bit format of
+; RtgFmtTab, at least 352 x RTGLINES, at most 2048 x 2048), else -1. D0 kept.
+RtgModeOK:
+	MOVEM.L	D0/D2/A0-A1/A6,-(SP)
+	MOVE.L	D0,D2
+	MOVE.L	RtgGfx,A6
+	JSR	-726(A6)		; FindDisplayInfo
+	TST.L	D0
+	BEQ.S	.bad
+	MOVE.L	D2,D0
+	MOVEQ	#P96IDA_ISP96,D1
+	BSR	RtgIdAttr
+	TST.L	D0
+	BEQ.S	.bad
+	MOVE.L	D2,D0
+	MOVEQ	#P96IDA_WIDTH,D1
+	BSR	RtgIdAttr
+	CMP.L	#352,D0
+	BCS.S	.bad
+	CMP.L	#2048,D0
+	BHI.S	.bad
+	MOVE.L	D2,D0
+	MOVEQ	#P96IDA_HEIGHT,D1
+	BSR	RtgIdAttr
+	CMP.L	#RTGLINES,D0
+	BCS.S	.bad
+	CMP.L	#2048,D0
+	BHI.S	.bad
+	MOVE.L	D2,D0
+	MOVEQ	#P96IDA_RGBFORMAT,D1
+	BSR	RtgIdAttr
+	BSR	RtgFmtFind
+	MOVE.L	A0,D0
+	BEQ.S	.bad
+	MOVEQ	#0,D1
+	BRA.S	.x
+.bad:	MOVEQ	#-1,D1
+.x:	MOVEM.L	(SP)+,D0/D2/A0-A1/A6
+	RTS
+
+; RtgFindWH: the first usable mode of RtgModeTW x RtgModeTH -> D0 (or -1).
+RtgFindWH:
+	MOVEM.L	D1/D4/A0-A1/A6,-(SP)
+	MOVEQ	#-1,D4
+.n:	MOVE.L	D4,D0
+	MOVE.L	RtgGfx,A6
+	JSR	-732(A6)		; NextDisplayInfo
+	MOVE.L	D0,D4
+	CMP.L	#-1,D4
+	BEQ.S	.x
+	BSR	RtgModeOK
+	TST.L	D1
+	BNE.S	.n
+	MOVEQ	#P96IDA_WIDTH,D1
+	BSR	RtgIdAttr
+	CMP.W	RtgModeTW,D0
+	BNE.S	.n
+	MOVE.L	D4,D0
+	MOVEQ	#P96IDA_HEIGHT,D1
+	BSR	RtgIdAttr
+	CMP.W	RtgModeTH,D0
+	BNE.S	.n
+	MOVE.L	D4,D0
+.x:	MOVEM.L	(SP)+,D1/D4/A0-A1/A6
+	RTS
+
+; RtgModeTxtMk: RtgModeTxt = "RTG WIDTHxHEIGHT" of RtgModeID (the menu's Display gadget).
+RtgModeTxtMk:
+	MOVEM.L	D0-D1/A0-A2,-(SP)
+	LEA	RtgModeTxt,A2
+	MOVE.B	#"R",(A2)+
+	MOVE.B	#"T",(A2)+
+	MOVE.B	#"G",(A2)+
+	MOVE.B	#" ",(A2)+
+	MOVE.L	RtgModeID,D0
+	MOVEQ	#P96IDA_WIDTH,D1
+	BSR	RtgIdAttr
+	BSR.S	RtgDec
+	MOVE.B	#"x",(A2)+
+	MOVE.L	RtgModeID,D0
+	MOVEQ	#P96IDA_HEIGHT,D1
+	BSR	RtgIdAttr
+	BSR.S	RtgDec
+	CLR.B	(A2)
+	MOVEM.L	(SP)+,D0-D1/A0-A2
+	RTS
+
+; RtgDec: D0.L (below 65536) in decimal at (A2)+.
+RtgDec:
+	MOVEM.L	D0-D2,-(SP)
+	AND.L	#$FFFF,D0
+	MOVEQ	#0,D2
+.d:	DIVU.W	#10,D0
+	SWAP	D0
+	MOVE.W	D0,-(SP)
+	CLR.W	D0
+	SWAP	D0
+	ADDQ.W	#1,D2
+	TST.L	D0
+	BNE.S	.d
+.o:	MOVE.W	(SP)+,D1
+	ADD.B	#"0",D1
+	MOVE.B	D1,(A2)+
+	SUBQ.W	#1,D2
+	BNE.S	.o
+	MOVEM.L	(SP)+,D0-D2
+	RTS
+
+; RtgModeVal: A0 = the value of RTGMODE= -> RtgModeTT (and RtgModeTW/TH). Anything else is ignored.
+RtgModeVal:
+	MOVEM.L	D0-D3/A0,-(SP)
+	MOVE.B	(A0),D0
+	OR.B	#32,D0
+	CMP.B	#"a",D0
+	BNE.S	.h
+	MOVEQ	#1,D0			; AUTO
+	BRA	.set
+.h:	CMP.B	#"$",(A0)
+	BNE.S	.h0
+	ADDQ.L	#1,A0
+	BRA.S	.hex
+.h0:	CMP.B	#"0",(A0)
+	BNE.S	.wh
+	MOVE.B	1(A0),D0
+	OR.B	#32,D0
+	CMP.B	#"x",D0
+	BNE.S	.wh
+	ADDQ.L	#2,A0
+.hex:	MOVEQ	#0,D0
+	MOVEQ	#0,D2
+.hl:	MOVE.B	(A0)+,D1
+	CMP.B	#"0",D1
+	BCS.S	.he
+	CMP.B	#"9",D1
+	BLS.S	.hd
+	OR.B	#32,D1
+	CMP.B	#"a",D1
+	BCS.S	.he
+	CMP.B	#"f",D1
+	BHI.S	.he
+	SUB.B	#39,D1			; a-f -> 10-15 with the "0" below
+.hd:	SUB.B	#"0",D1
+	AND.L	#15,D1
+	LSL.L	#4,D0
+	OR.L	D1,D0
+	ADDQ.W	#1,D2
+	BRA.S	.hl
+.he:	TST.W	D2
+	BEQ.S	.x
+	CMP.L	#2,D0			; 0-2 are not ModeIDs (markers here)
+	BLS.S	.x
+	BRA	.set
+.wh:	BSR.S	RtgDecIn
+	TST.W	D3
+	BEQ.S	.x
+	MOVE.L	D0,D2
+	MOVE.B	(A0)+,D1
+	OR.B	#32,D1
+	CMP.B	#"x",D1
+	BNE.S	.x
+	BSR.S	RtgDecIn
+	TST.W	D3
+	BEQ.S	.x
+	MOVE.W	D2,RtgModeTW
+	MOVE.W	D0,RtgModeTH
+	MOVEQ	#2,D0			; WIDTHxHEIGHT
+.set:	MOVE.L	D0,RtgModeTT
+.x:	MOVEM.L	(SP)+,D0-D3/A0
+	RTS
+
+; RtgDecIn: decimal digits at (A0)+ -> D0, D3 = how many (A0 left on the first other character).
+RtgDecIn:
+	MOVEQ	#0,D0
+	MOVEQ	#0,D3
+.l:	MOVE.B	(A0),D1
+	CMP.B	#"0",D1
+	BCS.S	.x
+	CMP.B	#"9",D1
+	BHI.S	.x
+	ADDQ.L	#1,A0
+	AND.L	#15,D1
+	MULU.W	#10,D0
+	ADD.L	D1,D0
+	ADDQ.W	#1,D3
+	CMP.W	#5,D3
+	BCS.S	.l
+.x:	RTS
+
+; RtgModeCli: A0 = the CLI arguments; RTGMODE=value anywhere (any case).
+RtgModeCli:
+	MOVEM.L	D0-D2/A0-A2,-(SP)
+.s:	TST.B	(A0)
+	BEQ.S	.x
+	MOVE.L	A0,A1
+	LEA	RtgModeCliNom(PC),A2
+.c:	MOVE.B	(A2)+,D1
+	BEQ.S	.hit
+	MOVE.B	(A1)+,D0
+	CMP.B	#97,D0
+	BCS.S	.c1
+	CMP.B	#122,D0
+	BHI.S	.c1
+	SUB.B	#32,D0
+.c1:	CMP.B	D1,D0
+	BEQ.S	.c
+	ADDQ.L	#1,A0
+	BRA.S	.s
+.hit:	MOVE.L	A1,A0
+	BSR	RtgModeVal
+.x:	MOVEM.L	(SP)+,D0-D2/A0-A2
+	RTS
+
+; RtgModeAuto: the menu's Display gadget, Automatic: RtgFind's mode for the next Power ON / Continue.
+RtgModeAuto:
+	MOVE.L	RtgAutoID,RtgModeID
+	CLR.L	DirPrefs+$18
+	CLR.W	RtgW			; the geometry again on the new screen
+	BRA	RtgModeTxtMk
+
+; RtgModeBack: RtgMenuPlay, the play screen did not open: with a chosen mode, the automatic one is tried.
+RtgModeBack:
+	MOVEM.L	D0-D1,-(SP)
+	MOVE.L	RtgModeID,D0
+	CMP.L	RtgAutoID,D0
+	BEQ.S	.x
+	BSR.S	RtgModeAuto
+	BSR	RtgPlayOpen
+.x:	MOVEM.L	(SP)+,D0-D1
+	RTS
+
+; RtgPickMode: the menu's Display gadget, Pick mode...: the ASL screen mode requester (asl.library V38) on the
+; menu window, showing only the modes RtgModeOK takes. The pick is used from the next Power ON / Continue and
+; goes in the prefs (Save Prefs keeps it).
+RtgPickMode:
+	MOVEM.L	D0-D7/A0-A6,-(SP)
+	MOVE.L	_AslBase,D0
+	BEQ.S	.x
+	MOVE.L	D0,A6
+	CMP.W	#38,20(A6)		; lib_Version
+	BCS.S	.x
+	MOVEQ	#2,D0			; ASL_ScreenModeRequest
+	SUB.L	A0,A0
+	JSR	-48(A6)			; AllocAslRequest
+	MOVE.L	D0,D7
+	BEQ.S	.x
+	LEA	RtgSmTags,A1
+	MOVE.L	MainMenuWnd,4(A1)	; ASLSM_Window
+	MOVE.L	RtgModeID,28(A1)	; ASLSM_InitialDisplayID
+	MOVE.L	D7,A0
+	JSR	-60(A6)			; AslRequest
+	TST.L	D0
+	BEQ.S	.f
+	MOVE.L	D7,A0
+	MOVE.L	(A0),D0			; sm_DisplayID
+	BSR	RtgModeOK
+	TST.L	D1
+	BNE.S	.f
+	MOVE.L	D0,RtgModeID
+	MOVE.L	D0,DirPrefs+$18
+	CLR.W	RtgW			; the geometry again on the new screen
+	BSR	RtgModeTxtMk
+.f:	MOVE.L	D7,A0
+	MOVE.L	_AslBase,A6
+	JSR	-54(A6)			; FreeAslRequest
+.x:	MOVEM.L	(SP)+,D0-D7/A0-A6
+	RTS
+
+; RtgSmFilter: ASLSM_FilterFunc hook, A1 = a ModeID -> D0 = 1 to list it.
+RtgSmFilter:
+	MOVEM.L	D1-D7/A0-A6,-(SP)
+	MOVE.L	A1,D0
+	BSR	RtgModeOK
+	MOVEQ	#0,D0
+	TST.L	D1
+	BNE.S	.x
+	MOVEQ	#1,D0
+.x:	MOVEM.L	(SP)+,D1-D7/A0-A6
+	RTS
+	ENDC
+
 ; A0 = the RtgFmtTab entry of P96 format D0.B, or 0.
 RtgFmtFind:
 	LEA	RtgFmtTab(PC),A0
@@ -812,6 +1145,11 @@ RtgMenuPlay:
 	BSR	RtgPlayOpen
 	TST.B	RtgOn
 	BNE.S	.x
+	IFEQ	NO_RTGMODE
+	BSR	RtgModeBack		; a chosen mode that did not open: the automatic one
+	TST.B	RtgOn
+	BNE.S	.x
+	ENDC
 	TST.B	RtgMenuOn
 	BEQ.S	.x
 	SF	RtgWant
@@ -2660,6 +2998,16 @@ RtgScanTTNom:	DC.B	"SCANLINES",0
 RtgScanCliNom:	DC.B	"SCANLINES=",0
 	EVEN
 	ENDC
+	IFEQ	NO_RTGMODE
+RtgModeTTNom:	DC.B	"RTGMODE",0
+RtgModeCliNom:	DC.B	"RTGMODE=",0
+RtgSmTitle:	DC.B	"RTG screen mode for play",0
+DispPickTxt:	DC.B	"Pick mode...",0
+DispAutoTxt:	DC.B	"Automatic",0
+	CNOP	0,4
+AgcDispR:	DC.L	RtgModeTxt,DispPickTxt,DispAutoTxt,0	; the colour program's Display labels on RTG
+AgcDispA:	DC.L	DispLab0,0				; and on AGA
+	ENDC
 
 	IFNE	DbgRows
 ; RtgDbgPanel: the debug rows (DbgPanelR, 1 bit a pixel) 1:1 on the top 17
@@ -2963,6 +3311,22 @@ RtgInt:		DC.L	0
 RtgP96:		DC.L	0
 RtgModeID:	DC.L	-1
 RtgMModeID:	DC.L	-1
+	IFEQ	NO_RTGMODE
+RtgAutoID:	DC.L	-1		; RtgFind's play mode
+RtgModeTT:	DC.L	0		; RTGMODE=: 0 none, 1 AUTO, 2 WIDTHxHEIGHT (RtgModeTW/TH), else a ModeID
+RtgModeTW:	DC.W	0
+RtgModeTH:	DC.W	0
+RtgSmTags:	DC.L	$80080002,0		; ASLSM_Window
+	DC.L	$8008002B,1		; ASLSM_SleepWindow
+	DC.L	$80080001,RtgSmTitle	; ASLSM_TitleText
+	DC.L	$80080064,0		; ASLSM_InitialDisplayID
+	DC.L	$8008007A,RtgSmHook	; ASLSM_FilterFunc
+	DC.L	0
+RtgSmHook:	DC.L	0,0,RtgSmFilter,0,0	; struct Hook (h_Entry)
+RtgModeTxt:	DC.B	"AGA",0		; "RTG WIDTHxHEIGHT" (RtgModeTxtMk)
+	DS.B	20
+	EVEN
+	ENDC
 RtgScr:		DC.L	0
 RtgBm:		DC.L	0
 RtgLock:	DC.L	0

@@ -4,6 +4,24 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.1
+
+- RTG: a choice of screen mode for play. The menu's Display gadget
+  shows the mode in use; Pick mode... opens a screen mode requester
+  with the 16-bit Picasso96 modes, and Automatic goes back to the
+  automatic choice (960x540, then 640x480, then the smallest mode
+  that fits). Kept by Save Prefs. The ToolType or Shell word
+  RTGMODE=AUTO, RTGMODE=800x600 or RTGMODE=<mode ID in hex> does the
+  same. A mode that can't be opened falls back to the automatic
+  choice.
+- Sound: a sampled (DDA) channel that starts again no longer plays
+  a stale level from before, and a gap between samples fades to
+  the middle level. Blazing Lazers' drums are clean.
+- AGA: the hardware scroll values go to the copper list as
+  longwords, a little less work each frame.
+- Known: R-Type on AGA shows thin dark streaks under some enemies
+  in places (2.0 too). They don't affect play.
+
 ## New in 2.0
 
 - Two programs in the drawer: AGA and RTG (the same program with the

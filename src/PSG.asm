@@ -762,6 +762,10 @@ PSGDdaReset:
 	DBF	D0,.h
 	MOVE.L	#$10101010,PSGDdaHold
 	MOVE.L	#$10101010,PSGDdaHold+4
+	IFEQ	NO_DDAPRIME
+	MOVE.L	#$10101010,PSGDdaHoldPl
+	MOVE.L	#$10101010,PSGDdaHoldPl+4
+	ENDC
 	CLR.L	PSGDdaHad
 	CLR.L	PSGDdaHad+4
 	CLR.L	PSGDdaLive
@@ -889,6 +893,13 @@ PSGVoiceDda:
 	MOVE.W	PSGDdaPer,(PSGVoiceNextPer.L,D7.W*2)
 	ENDC
 	SF	(PSGPrimed.L,D6.W)
+	IFEQ	NO_DDAPRIME
+	MOVEM.L	D1/D4/A0,-(SP)		; a new stream: silence (the mid level) until its queue starts
+	MOVEQ	#0,D4
+	BSR	PSGDdaHoldFill
+	MOVE.B	#16,(PSGDdaHoldPl.L,D6.W)
+	MOVEM.L	(SP)+,D1/D4/A0
+	ENDC
 	MOVE.W	D6,D0
 	MULU.W	#264,D0
 	ADD.L	#PSGDdaHoldBuf,D0
@@ -1057,7 +1068,11 @@ PSGServe:
 	SWAP	D0
 	MOVE.B	D2,D0
 	LSL.W	#8,D0
+	IFEQ	NO_DDAPRIME
+	MOVE.B	(PSGDdaHoldPl.L,D2.W),D0	; the level in the hold buffer
+	ELSE
 	MOVE.B	(PSGDdaHold.L,D2.W),D0
+	ENDC
 	MOVE.W	PSGDdaPer,D1
 	MOVEQ	#0,D2
 	BSR	DdaDumpRec
@@ -1115,9 +1130,29 @@ PSGDdaFrame:
 	TST.B	(PSGDdaLive.L,D6.W)
 	BEQ	.next
 	SUBQ.B	#1,(PSGDdaLive.L,D6.W)	; no samples: still "streaming" for 8 frames
+	IFEQ	NO_DDAFADE
+	TST.B	(PSGBuffer+4.L,D6.W*8)
+	BMI	.next			; channel on: the level holds, as on the chip
+	CMP.B	#16,(PSGDdaHold.L,D6.W)
+	BEQ	.next			; already at the mid level
+	TST.B	(PSGPrimed.L,D6.W)
+	BNE.S	.fadeq
+	MOVE.B	#16,(PSGDdaHold.L,D6.W)	; no queue running: the hold buffer itself goes to the mid level
+	IFEQ	NO_DDAPRIME
+	MOVE.B	#16,(PSGDdaHoldPl.L,D6.W)
+	ENDC
+	MOVEQ	#0,D4
+	BSR	PSGDdaHoldFill
+	BRA	.next
+.fadeq:	ST	PSGDdaFadeNow		; off (a gap): one buffer that fades to the mid level
+	BRA.S	.had2
+	ENDC
 	BRA	.next
 .had:	SF	(PSGDdaHad.L,D6.W)
 	MOVE.B	#8,(PSGDdaLive.L,D6.W)
+	IFEQ	NO_DDAFADE
+.had2:
+	ENDC
 	LEA	PSGDdaScratch,A1
 	MOVEQ	#0,D5
 	MOVE.B	(PSGRingWr.L,D6.W),D0
@@ -1168,10 +1203,39 @@ PSGDdaFrame:
 	MOVE.B	D4,(A1)+
 	DBF	D1,.l
 	MOVE.B	D4,(A1)			; sample 264 = sample 263
+	IFEQ	NO_DDAFADE
+	TST.B	PSGDdaFadeNow
+	BEQ.S	.nofade
+	SF	PSGDdaFadeNow
+	LEA	-263(A1),A0		; the buffer: the held level down to 0 in 32 samples, then 0
+	EXT.W	D4
+	MOVEQ	#32-1,D1
+.fd:	MOVE.W	D4,D3
+	MULS.W	D1,D3
+	ASR.W	#5,D3
+	MOVE.B	D3,(A0)+
+	DBF	D1,.fd
+	MOVE.W	#264-32-1,D1
+.fz:	CLR.B	(A0)+
+	DBF	D1,.fz
+	MOVEQ	#16,D2			; the hold is the mid level from now on
+	MOVEQ	#0,D4
+.nofade:
+	ENDC
+	IFEQ	NO_DDAPRIME
+	MOVE.B	D2,(PSGDdaHold.L,D6.W)	; the next frame's level before its first write
+	TST.B	(PSGPrimed.L,D6.W)
+	BEQ.S	.same			; priming: Paula hasn't played these yet, its hold stays at the level it last played
+	CMP.B	(PSGDdaHoldPl.L,D6.W),D2
+	BEQ.S	.same
+	MOVE.B	D2,(PSGDdaHoldPl.L,D6.W)
+	BSR	PSGDdaHoldFill
+	ELSE
 	CMP.B	(PSGDdaHold.L,D6.W),D2
 	BEQ.S	.same
 	MOVE.B	D2,(PSGDdaHold.L,D6.W)
 	BSR	PSGDdaHoldFill
+	ENDC
 .same:
 	IFNE	DdaStat
 	ADDQ.L	#1,DdaStQueued
@@ -1549,8 +1613,14 @@ PSGDdaPer:	DC.W	270
 PSGDdaUnder:	DC.W	0
 PSGVoiceDdaCh:	DC.B	-1,-1,-1,-1	; channel a voice streams, -1 = none
 PSGDdaHad:	DS.B	8		; DDA writes this frame
+	IFEQ	NO_DDAFADE
+PSGDdaFadeNow:	DS.B	2		; this frame's buffer fades out (a gap)
+	ENDC
 PSGDdaLive:	DS.B	8		; frames left counting as streaming
 PSGDdaHold:	DS.B	8		; last 5-bit level
+	IFEQ	NO_DDAPRIME
+PSGDdaHoldPl:	DS.B	8		; the level in the hold buffer (what Paula plays on an underrun)
+	ENDC
 PSGRingRd:	DS.B	8
 PSGRingWr:	DS.B	8
 PSGPrimed:	DS.B	8

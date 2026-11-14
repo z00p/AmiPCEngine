@@ -173,13 +173,16 @@ MenuAutoIns=0
 MenuAutoMax=12
 	ENDC
 	IFND	MenuShow	; menu test builds: open one window over the main menu (after any MenuAuto trips):
-MenuShow=0		; 1 About, 2 Help Page, 3 error window, 4 Insert file requester, 5 CPU error window, 6 RTG scanlines Hard 50% + Save Prefs (then About)
+MenuShow=0		; 1 About, 2 Help Page, 3 error window, 4 Insert file requester, 5 CPU error window, 6 RTG scanlines Hard 50% + Save Prefs (then About), 7 Pick mode... (AGC, RTG)
 	ENDC
 	IFND	StateDump	; AutoExit test builds: at exit write IRAM, VRAM, VDC regs, palette, SAT copy to PROGDIR:pcestate.bin
 StateDump=0
 	ENDC
 	IFND	VdcLog	; StateDump test builds: VDC register writes (not R2/6/7/8) with frame, line, PC, MPRs after pcestate.bin
 VdcLog=0
+	ENDC
+	IFND	ScrRing	; test builds (menu): the scroll log of the last 1000 frames (lines, BXR, BYR; AGA split, late, skip) -> PROGDIR:scrring.bin at each return to the menu, and at the end of an AutoExit run (tools/scrring.py)
+ScrRing=0
 	ENDC
 	IFND	ScrDump	; AutoExit test builds: the scroll log (line, BXR, BYR) of 1000 frames from frame ScrDump -> PROGDIR:scrdump.bin
 ScrDump=0
@@ -198,6 +201,9 @@ NO_RTG=0
 	ENDC
 	IFND	NO_RTGFIX	; 1 = the RTG code as merged (CR log of 256 writes, sprites from line 240 dropped, palette mark, BSS buffers, failed screens ignored)
 NO_RTGFIX=0
+	ENDC
+	IFND	NO_RTGMODE	; 1 = no RTG mode choice (ToolType / CLI RTGMODE=, prefs long $18; the colour program's Display gadget: the mode, Pick mode..., Automatic)
+NO_RTGMODE=0
 	ENDC
 	IFND	NO_BLITREQ	; 1 = a blit ending during CongelaAMIGA's blitter wait loses its interrupt (INTREQ saved before the wait)
 NO_BLITREQ=0
@@ -304,6 +310,15 @@ NO_DDAPER=0
 	IFND	NO_DDAGAP	; 1 = a DDA stream whose channel the game switches off ($0804 = 0) ends once its queue has played out, and its voice goes to a tone; 0 = it keeps its voice for the 8 'live' frames as when DDA stays on (Blazing Lazers turns its drum channel off for 4 frames every beat: the voice went to a harmony channel for a frame or two each beat and the drums restarted, 94 cut notes a minute)
 NO_DDAGAP=0
 	ENDC
+	IFND	NO_DDAFADE	; 1 = through a gap ($0804 = 0, the stream still live) the drum voice holds the last DDA level (Blazing Lazers: often near full scale for 4 frames each beat, a sub-bass thump); 0 = it fades to the mid level in 32 samples and stays there, as the chip's channel goes silent
+NO_DDAFADE=0
+	ENDC
+	IFND	NO_DDAPRIME	; 1 = while a DDA stream primes (waits for two buffers: at its start and after a gap) Paula plays the hold buffer at the last level of the newest queued buffer, which it hasn't played yet (Blazing Lazers: often near full scale, a frame of DC at each beat); 0 = the hold buffer keeps the level Paula last played (the mid level at a stream start)
+NO_DDAPRIME=0
+	ENDC
+	IFND	NO_SCRLONG	; 1 = SetScrollAtRender writes each copper move as two words; 0 = one long (half the chip-RAM writes per scroll change; HuZERO's road changes scroll on most lines)
+NO_SCRLONG=0
+	ENDC
 	IFND	NO_TILEWRAP	; 1 = AGA takes a BAT tile number of $800 or more as it is; 0 = it wraps to the 32K words of VRAM as on RTG (Parodius after the bell's flash bomb fills 480 hidden cells with tiles $Exx-$Fxx: AGA read their redraw flags past the end of TabRedef, never cleared, and redrew them every frame: 17 fps)
 NO_TILEWRAP=0
 	ENDC
@@ -393,6 +408,9 @@ DispAlt=0
 	ENDC
 	IFND	NO_MENU2	; 1 = the 1.4 launcher window (Juan's ghosted gadgets, one pad on port 2, the Options menu); 0 = Screen / Display / Scanlines gadgets, a pad type for each port, the Backup RAM text, dead items gone
 NO_MENU2=0
+	ENDC
+	IFND	NO_REL21	; 1 = 2.0 version texts
+NO_REL21=0
 	ENDC
 	IFND	NO_REL20	; 1 = 1.4 version texts
 NO_REL20=0
@@ -526,7 +544,11 @@ NF_Menu:
 	IFEQ	NO_REL13
 	IFEQ	NO_REL14
 	IFEQ	NO_REL20
+	IFEQ	NO_REL21
+	DC.B	"$VER:AmiPC-Engine Emulator v2.1 (14.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.0 (12.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v1.4 (9.11.26)",0,0
 	ENDC
@@ -901,6 +923,9 @@ BUC:
 	ENDC
 
 	ADDQ.L	#1,FPS_Count
+	IFNE	ScrRing
+	JSR	ScrRingFrame
+	ENDC
 
 	IFNE	MenuAuto
 	SUBQ.L	#1,MenuAutoCnt
@@ -2248,6 +2273,73 @@ SetPicTop:
 PicTop:	DC.W	$2F
 	ENDC
 
+	IFNE	ScrRing
+; ScrRingFrame: the main loop, each PCE frame: the frame's scroll list into ring slot ScrRingI (192 bytes: frame
+; number, AgcYb, AgcLate, AgcSkipped, then up to 30 (line, BXR, BYR) entries, -1).
+ScrRingFrame:
+	MOVEM.L	D0/A0/A1,-(SP)
+	ADDQ.L	#1,ScrRingN
+	MOVE.W	ScrRingI,D0
+	ADDQ.W	#1,D0
+	CMP.W	#1000,D0
+	BCS.S	.i
+	MOVEQ	#0,D0
+.i:	MOVE.W	D0,ScrRingI
+	MULU.W	#192,D0
+	LEA	ScrRingBuf,A1
+	ADD.L	D0,A1
+	MOVE.L	ScrRingN,(A1)+
+	IFNE	AGC
+	MOVE.W	AgcYb,(A1)+
+	MOVE.B	AgcLate,(A1)+
+	MOVE.B	AgcSkipped,(A1)+
+	ELSE
+	CLR.L	(A1)+
+	ENDC
+	MOVE.L	Regs+ScrollChangesNext,A0
+	MOVEQ	#30-1,D0
+.c:	MOVE.W	(A0)+,(A1)+
+	BMI.S	.x
+	MOVE.W	(A0)+,(A1)+
+	MOVE.W	(A0)+,(A1)+
+	DBF	D0,.c
+	MOVE.W	#-1,(A1)
+.x:	MOVEM.L	(SP)+,D0/A0/A1
+	RTS
+; ScrRingWrite: the menu, after play (OS alive): header (ScrRingN, ScrRingI) + the 1000 slots.
+ScrRingWrite:
+	MOVEM.L	D0-D7/A0-A6,-(SP)
+	MOVE.L	$4.W,A6
+	LEA	ScrRingDos(PC),A1
+	MOVEQ	#0,D0
+	JSR	-$228(A6)		; OpenLibrary
+	TST.L	D0
+	BEQ.S	.x
+	MOVE.L	D0,A6
+	MOVE.L	#ScrRingName,D1
+	MOVE.L	#1006,D2
+	JSR	-30(A6)			; Open
+	MOVE.L	D0,D4
+	BEQ.S	.cl
+	MOVE.L	D4,D1
+	MOVE.L	#ScrRingN,D2
+	MOVEQ	#8,D3
+	JSR	-48(A6)			; Write
+	MOVE.L	D4,D1
+	MOVE.L	#ScrRingBuf,D2
+	MOVE.L	#1000*192,D3
+	JSR	-48(A6)			; Write
+	MOVE.L	D4,D1
+	JSR	-36(A6)			; Close
+.cl:	MOVE.L	A6,A1
+	MOVE.L	$4.W,A6
+	JSR	-$19E(A6)		; CloseLibrary
+.x:	MOVEM.L	(SP)+,D0-D7/A0-A6
+	RTS
+ScrRingDos:	DC.B	"dos.library",0
+ScrRingName:	DC.B	"PROGDIR:scrring.bin",0
+	EVEN
+	ENDC
 ;;	-=-=-=-==-=-=-=-=-=-=-
 	CNOP	0,8
 DameVBR:MOVEC	VBR,A0
@@ -2402,6 +2494,9 @@ Salir:
 	JSR	ProfStop
 	ENDC
 	BSR	DescongelaAMIGA
+	IFNE	ScrRing
+	JSR	ScrRingWrite		; (test builds) also at the end of an AutoExit run
+	ENDC
 	IFEQ	NO_RTG
 	JSR	RtgPlayClose
 	IFNE	AGC
@@ -3067,8 +3162,15 @@ SetScrollAtRender:
 	move.l	D2,D3
 	lsl.w	#4,d3
 	or.w	d2,d3
+	IFEQ	NO_SCRLONG
+	swap	d3
+	move.w	#$0102,d3
+	swap	d3
+	move.l	d3,(a5)+
+	ELSE
 	move.w	#$0102,(a5)+
 	move.w	d3,(a5)+
+	ENDC
 
 
 	neg.l	d4		; Scroll X
@@ -3081,6 +3183,20 @@ SetScrollAtRender:
 	add.l	#PantGfx-4,D0
 
 	moveq	#8-1,D2
+	IFEQ	NO_SCRLONG
+	move.l	#$00E00000,d3	; the register in the upper word: one long write per copper move (32-bit chip bus)
+.loop2:
+	swap	D0
+	move.w	D0,d3
+	move.l	d3,(a5)+
+	add.l	#$00020000,d3
+	swap	D0
+	move.w	D0,d3
+	move.l	d3,(a5)+
+	add.l	#$00020000,d3
+	add.l	#(GfxBufNextBpl),D0
+	dbf	D2,.loop2
+	ELSE
 	move.w	#$00E0,d3
 .loop2:
 	move.w	d3,(a5)+
@@ -3093,6 +3209,7 @@ SetScrollAtRender:
 	addq.w	#2,d3
 	add.l	#(GfxBufNextBpl),D0
 	dbf	D2,.loop2
+	ENDC
 
 	RTS
 
@@ -4428,6 +4545,12 @@ PrbSnapB:	DS.B	PrbSnapLen
 	ENDC
 	IFNE	ScrDump
 ScrDumpBuf:	DS.B	1000*128
+	ENDC
+	IFNE	ScrRing
+	CNOP	0,4
+ScrRingN:	DS.L	1		; frames logged (header long 0)
+ScrRingI:	DS.W	2		; the last slot written (header word 2)
+ScrRingBuf:	DS.B	1000*192
 	ENDC
 ;	SECTION	Tablas,Data
 ;	------------------------

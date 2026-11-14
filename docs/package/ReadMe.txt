@@ -84,9 +84,23 @@ ToolTypes (in the icon's Information window):
              menu's Scanlines gadget (ghosted on AGA); it is kept by
              Save Prefs. A SCANLINES ToolType or Shell word wins over
              the saved prefs.
+  RTGMODE=AUTO|<width>x<height>|<mode ID>
+             RTG only: the Picasso96 screen mode for play. AUTO (the
+             default) picks one itself from the 16-bit modes: 960x540
+             (an exact 2x on a 1080p display), then 640x480, then the
+             smallest mode that holds the picture at 2x, then one
+             that holds it at 1x. RTGMODE=800x600 takes the 16-bit
+             mode of that size, RTGMODE=$50041100 the mode with that
+             ID (hex). The mode has to be 16-bit and at least 352x240.
+             The picture is scaled by the largest whole number that
+             fits and centred. The same choice is the menu's Display
+             gadget; it is kept by Save Prefs. An RTGMODE ToolType or
+             Shell word wins over the saved prefs. If the mode can't
+             be opened, the automatic choice is used instead.
 
 From a Shell: AGA RTG   (the word RTG, as the ToolType)
               AGA RTG SCANLINES=50
+              AGA RTG RTGMODE=800x600
 
 On RTG the screen starts in NTSC (60 Hz), the PC Engine's own rate,
 unless the menu's Screen gadget (or your saved prefs) says PAL. On PAL
@@ -111,7 +125,13 @@ Backup RAM     the game's save file: "No save file yet", "Save file
                found", "Save file loaded" or "Game saved".
 Screen         NTSC (60Hz) or PAL (50Hz), RTG only, for the next
                Power ON or Continue. The AGA screen is always NTSC.
-Display        shows AGA or RTG. To change it, start the other icon.
+Display        AGA, or on RTG the mode the game is shown in (such as
+               RTG 960x540). Pick mode... opens a screen mode
+               requester with the 16-bit Picasso96 modes; Automatic
+               goes back to the automatic choice (see RTGMODE in
+               section 3). A new mode applies at the next Power ON or
+               Continue. To switch between AGA and RTG, start the
+               other icon.
 Scanlines      RTG only (Off, Hard 25%, Hard 50%, Hard 75%, Blended
                light, Blended, Blended strong), see SCANLINES in
                section 3. A new setting applies at the next Power ON
@@ -120,11 +140,11 @@ Joy-Control    the pad on each port, see section 5.
 Project menu   About, Help Page, Save Prefs, Quit (right mouse button).
 Cartridges     Insert Cartridge, Eject Cartridge.
 
-Save Prefs keeps the Screen, Scanlines and Joy-Control
-settings and the drawer the requester was last in.
+Save Prefs keeps the Screen, Display (the RTG mode), Scanlines and
+Joy-Control settings and the drawer the requester was last in.
 
-On OS 3.5 and later (chooser.gadget) the Screen, Scanlines and port
-settings open a list to pick from. Without chooser.gadget,
+On OS 3.5 and later (chooser.gadget) the Screen, Display, Scanlines
+and port settings open a list to pick from. Without chooser.gadget,
 as on OS 3.1, each click steps to the next setting.
 
 Games that save to backup RAM keep their saves: one 8 KB file per
@@ -210,6 +230,8 @@ Known faults
   * Games 256 pixels wide look narrow on an RTG screen at plain 2x.
   * Beer Girl Stadium: a few sprite colours differ from Mesen.
   * Street Fighter II': the card takes 2.5 MB of Fast RAM.
+  * R-Type on AGA: thin dark streaks under some enemies in places.
+    They don't affect play.
 
 
 8. History
@@ -230,8 +252,8 @@ Known faults
          six sound channels, DDA samples, every sprite palette on an
          RTG screen, and full speed on an A1200 with a PiStorm.
          Version 1.0 came out on 31 October, 1.1 on 2 November,
-         1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November and
-         2.0 on 12 November.
+         1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November,
+         2.0 on 12 November and 2.1 on 14 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -245,7 +267,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 2.0    z00p
+  Versions 1.0 to 2.1    z00p
   Web and menu graphics  Multivac
   With thanks to         Zener and Sandman, and reassembler for his
                          guidance and direction
@@ -261,7 +283,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 2.0, by z00p, are community updates
+Entertainment). Versions 1.0 to 2.1, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

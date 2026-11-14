@@ -587,6 +587,9 @@ NoEsNTSC:MOVE.W	D1,$DFF1DC
 ; -=-=-
 	BSR	RefrescaReloj
 ; -=-=-
+	IFNE	ScrRing
+	JSR	ScrRingWrite		; (test builds) the last 1000 frames' scroll log
+	ENDC
 	IFEQ	NO_BRAMSAVE
 	BSR	BramSave
 	IFEQ	NO_MENU2
@@ -1405,7 +1408,11 @@ PonPrefs:
 	TST.B	RtgAvail
 	SEQ	D2			; ghosted without P96
 	IFNE	AGC
+	IFEQ	NO_RTGMODE
+	BSR	DispModeTags		; the colour program: RTG shows its mode (Pick mode..., Automatic), AGA ghosted
+	ELSE
 	ST	D2			; the colour program: AGA colour or RTG as started (RTG word), ghosted
+	ENDC
 	ENDC
 	MOVE.W	#GD_INTER,D0
 	MOVE.L	#$8003000E,D1
@@ -1470,12 +1477,89 @@ SetCycle:
 .tg:	DC.L	$8008000F,0,0,0
 
 	IFEQ	DispOff
+	IFNE	AGC
+	IFEQ	NO_RTGMODE
+; DispMode: the colour program's Display gadget on RTG, D0 = 0 the mode, 1 Pick mode..., 2 Automatic. The
+; gadget goes back to the mode with its new name.
+DispMode:
+	MOVEM.L	D0-D1/A0-A3/A6,-(SP)
+	TST.W	D0
+	BEQ.S	.x			; the mode itself picked again
+	TST.B	RtgWant
+	BEQ.S	.x
+	CMP.W	#1,D0
+	BNE.S	.a
+	JSR	RtgPickMode
+	BRA.S	.s
+.a:	JSR	RtgModeAuto
+.s:	MOVEQ	#0,D0
+	MOVE.W	#GD_INTER,D1
+	BSR	SetCycle
+	LEA	MainMenuGadgets,A0
+	MOVE.L	GD_INTER*4(A0),A0
+	IFEQ	ChoosOff
+	BSR	ChooserIs
+	BEQ.S	.x			; a chooser: SetCycle drew it
+	ENDC
+	MOVE.L	MainMenuWnd,A1
+	SUB.L	A2,A2
+	LEA	.tg(PC),A3
+	MOVE.L	_GadToolsBase(PC),A6
+	JSR	-$2A(A6)		; GT_SetGadgetAttrsA: the labels again, so the new name is drawn
+.x:	MOVEM.L	(SP)+,D0-D1/A0-A3/A6
+	RTS
+	CNOP	0,4
+.tg:	DC.L	$8008000E,AgcDispR,$8008000F,0,0
+
+; DispModeTags: PonPrefs, the colour program: the Display gadget's labels (RTG: its mode, Pick mode...,
+; Automatic; AGA: AGA), set to the first. D2 = 1 (ghosted) on AGA.
+DispModeTags:
+	MOVEM.L	D0-D1/A0-A1,-(SP)
+	MOVE.L	#AgcDispA,D2
+	TST.B	RtgWant
+	BEQ.S	.l
+	MOVE.L	#AgcDispR,D2
+.l:	MOVE.W	#GD_INTER,D0
+	MOVE.L	#$8008000E,D1		; GTCY_Labels
+	BSR	PonTag
+	MOVEQ	#0,D2
+	MOVE.W	#GD_INTER,D0
+	BSR	PonCycle
+	MOVEM.L	(SP)+,D0-D1/A0-A1
+	MOVEQ	#0,D2
+	TST.B	RtgWant
+	SEQ	D2
+	RTS
+
+; DispAgaNow: DispSync, the colour program: RTG off now, so the gadget says AGA, ghosted.
+DispAgaNow:
+	TST.B	RtgWant
+	BNE.S	.x
+	MOVEM.L	D0-D1/A0-A1,-(SP)
+	LEA	RtgModeTxt,A0
+	MOVE.B	#"A",(A0)+
+	MOVE.B	#"G",(A0)+
+	MOVE.B	#"A",(A0)+
+	CLR.B	(A0)
+	LEA	MainMenuGadgets+(GD_INTER*4),A0
+	MOVE.L	MainMenuWnd,A1
+	MOVEQ	#1,D0
+	BSR	GadsOnOff
+	MOVEM.L	(SP)+,D0-D1/A0-A1
+.x:	RTS
+	ENDC
+	ENDC
 ; DispSel: the Display gadget (AGA / RTG for the next Power ON).
 DispSel:
 	LEA	MainMenuPunts,A0
 	MOVE.W	#GD_INTER,D1
 	MOVEQ	#0,D0
 	BSR	GetGadgetValue
+	IFNE	AGC
+	IFEQ	NO_RTGMODE
+	BRA	DispMode
+	ENDC
+	ENDC
 	IFEQ	ChoosOff
 	MOVEQ	#0,D1
 	TST.B	RtgWant
@@ -1495,6 +1579,11 @@ DispSel:
 	ENDC
 ; DispSync: the gadget after RTG was turned off (the RTG play screen did not open).
 DispSync:
+	IFNE	AGC
+	IFEQ	NO_RTGMODE
+	BSR	DispAgaNow
+	ENDC
+	ENDC
 	MOVEQ	#0,D0
 	TST.B	RtgWant
 	BEQ.S	DispShow
@@ -2739,6 +2828,10 @@ Control:
 	ENDC
 	BSR	SavePrefs		; as Project > Save Prefs
 	BSR	About
+	ENDC
+	IFEQ	MenuShow-7
+	MOVEQ	#1,D0			; as the Display gadget's Pick mode... (the colour program on RTG)
+	BSR	DispMode
 	ENDC
 	MOVEM.L	(SP)+,D0-D7/A0-A6
 	BRA.S	.noShow

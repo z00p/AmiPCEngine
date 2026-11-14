@@ -64,7 +64,7 @@ supported: CD-ROM games, SuperGrafx.
   default. The switch block is at the top of `src/Main.asm`. `-DDbgRows=1`
   draws timing rows at the top of the screen
   (see `docs/package/Debug rows.txt`).
-- Release package: `python tools/make_release.py --build --version 2.0`
+- Release package: `python tools/make_release.py --build --version 2.1`
   builds the release binary and stages the drawer; the archive is made with
   the Amiga's own `lha`.
 
@@ -81,14 +81,14 @@ supported: CD-ROM games, SuperGrafx.
 ## Credit
 
 - **AmiPCEngine:** Juan Antonio Gomez Galvez (GUS Entertainment).
-- **Versions 1.0 to 2.0:** z00p.
+- **Versions 1.0 to 2.1:** z00p.
 - **Web and menu graphics:** Multivac.
 - **Thanks:** Zener and Sandman, and reassembler for his guidance and direction.
 - Menu code made with Devpac III (HiSoft) and GadToolsBox (Jaba Development).
 
 ## Licence
 
-AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 2.0, by
+AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 2.1, by
 z00p, are community updates made and published with his permission. See [NOTICE.md](NOTICE.md).
 
 ## Trademarks
