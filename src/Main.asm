@@ -105,6 +105,18 @@ NO_BUILDINFO=0
 	IFND	NO_PALDEF	; 1 = Juan's default screen PAL (games at 5/6 speed); 0 = NTSC, the PC Engine's own 60 Hz
 NO_PALDEF=0
 	ENDC
+	IFND	EmbedNtsc	; (test builds) 1 = EMBED builds play on the NTSC screen, as from the menu (they keep the Workbench's mode)
+EmbedNtsc=0
+	ENDC
+	IFND	NO_NTSCRATE	; 1 = the NTSC screen on a PAL Amiga is the chipset's own NTSC frame (59.28 Hz on the PAL crystal, 0.9% slow); 0 = a programmed 262-line frame of 226 colour clocks there (59.90 Hz; the PC Engine is 59.83)
+NO_NTSCRATE=0
+	ENDC
+	IFND	BeamCC		; (test builds) BeamSet's frame: colour clocks a line
+BeamCC=226
+	ENDC
+	IFND	BeamLn		; (test builds) BeamSet's frame: lines in a long frame (261 with BeamCC 227 is 59.87 Hz, but the
+BeamLn=262			; picture's last line is then the frame's last: the A1200 scrolled Parodius' HUD with the playfield)
+	ENDC
 	IFND	NO_SPRDIRTY	; 1 = sprite dirty marks run (column+1)*16 lines (D2 clobbered), past the end of the Tablas hunk
 NO_SPRDIRTY=0
 	ENDC
@@ -388,9 +400,28 @@ NO_TSTROM=0
 	IFND	DispTest	; test builds (NO_MENU2=0): 1/2 = the Display gadget set to AGA/RTG before the menu loop
 DispTest=0
 	ENDC
-	IFND	PadTest	; test builds (NO_MENU2=0): 1 = port 1 CD32 pad, port 2 joypad
+	IFND	PadTest	; test builds (NO_MENU2=0): 1 = port 1 CD32 pad, port 2 joypad; 2 = port 1 KTRL CD32+, port 2 CD32 pad
 PadTest=0
 	ENDC
+	IFND	LupaTest	; test builds: each game is left after LupaTest frames, as Esc (the game argument and ONEGAME in WinUAE)
+LupaTest=0
+	ENDC
+	IFND	NO_LUPA		; 1 = no game on the command line or project icon (the menu only, return code 0); 0 = Lupa.asm: [ROM] [AGA|RTG] [ONEGAME] [MENU] [PROFILE=], return codes 0/5/10/20
+NO_LUPA=0
+	ENDC
+	IFND	NO_OCSRTG	; 1 = without an AGA chipset the 'AGA required' window as before; 0 = no AGA but RTG (P96, a play mode): RTG only, no window, Display gadget ghosted
+NO_OCSRTG=0
+	ENDC
+	IFND	NO_CD		; 1 = no CD-ROM unit; 0 = CD.asm: a .cue (Insert, command line) loads the disc's data tracks into RAM and runs it on the System Card (syscard3.pce or cd_bios.rom), ADPCM and CD audio silent
+NO_CD=0
+	ENDC
+	IFND	NO_CD32KIT	; 1 = the 2.1 CD32 pad read (one way) and four pad types; 0 = the CD32 kit's reader (CD32Read.asm): "CD32 Joypad" with pin 6 idling high, and a fifth type for each port, "KTRL CD32+" (the low clock)
+NO_CD32KIT=0
+	ENDC
+	IFND	PadForce	; AutoExit test builds (kit reader): port 1 KTRL CD32+, port 2 CD32 Joypad whatever the prefs; the reads with a CD32 pad's ID bits counted per port into AmiPCE.result
+PadForce=0
+	ENDC
+PadTypes=5-NO_CD32KIT	; pad types in the menu (none, joystick, CD32 pad, joypad, KTRL CD32+)
 	IFND	NO_CHOOSER	; 1 = the menu's settings stay GadTools cycle gadgets; 0 = chooser.gadget pop-up lists when it opens (OS 3.5 and up), else the cycles
 NO_CHOOSER=0
 	ENDC
@@ -409,6 +440,9 @@ DispAlt=0
 	IFND	NO_MENU2	; 1 = the 1.4 launcher window (Juan's ghosted gadgets, one pad on port 2, the Options menu); 0 = Screen / Display / Scanlines gadgets, a pad type for each port, the Backup RAM text, dead items gone
 NO_MENU2=0
 	ENDC
+	IFND	NO_REL22	; 1 = 2.1 version texts
+NO_REL22=0
+	ENDC
 	IFND	NO_REL21	; 1 = 2.0 version texts
 NO_REL21=0
 	ENDC
@@ -424,6 +458,44 @@ NO_REL13=0
 	IFND	NO_REL12	; 1 = 1.1 version texts
 NO_REL12=0
 	ENDC
+	IFND	NO_SNDOUT	; 1 = no stereo output core on Paula (src/SndOut.asm, from AmiMSX's FMX ring)
+NO_SNDOUT=0
+	ENDC
+	IFND	NO_PSGMIX	; 1 = no software mix of the six PSG channels (ToolType / CLI word SOUNDMIX, RTG only, src/PSGMix.asm)
+NO_PSGMIX=0
+	ENDC
+	IFND	NO_SND14	; 1 = the mix is 8-bit on two voices; 0 = 14-bit on four (high byte at volume 64, low bits at volume 1)
+NO_SND14=0
+	ENDC
+	IFND	SndStat	; AutoExit test builds: ring and interrupt figures in AmiPCE.result
+SndStat=0
+	ENDC
+	IFND	CdPsgMute	; test builds: the mix without the PSG
+CdPsgMute=0
+	ENDC
+	IFND	CdMusDef	; CD music level in the mix without CDMUSIC=: 512 = full scale (the disc's own level), 1024 = twice (the default)
+CdMusDef=1024
+	ENDC
+	IFND	CdDbg	; AutoExit test builds with SndStat, a CD game: CD capture counts in the snd line
+CdDbg=0
+	ENDC
+	IFND	MixDump	; AutoExit test builds: the mix as handed to SndOut -> PROGDIR:AmiPCE.mix
+MixDump=0
+	ENDC
+	IFND	AdDump	; AutoExit test builds, a CD game: ADPCM state and samples a frame -> PROGDIR:AmiPCE.adp
+AdDump=0
+	ENDC
+	IFND	MIXFORCE	; test builds: SOUNDMIX without the ToolType / CLI word
+MIXFORCE=0
+	ENDC
+MixOff=NO_SNDOUT|NO_PSGMIX|DdaTickOff|NO_RTG	; the mix needs all of these
+	IFND	NO_CDSND	; 1 = CD audio and ADPCM silent (stage a); 0 = a CD game plays the PSG, CD audio and ADPCM through the mix (SndOut, AGA and RTG), its audio tracks read into RAM with the disc
+NO_CDSND=0
+	ENDC
+CdSndOff=NO_CDSND|NO_CD|MixOff
+	IFND	NO_ADSTART	; 1 = an ADPCM clip starts from the decoder state the last one left; 0 = from the centre, as Mesen
+NO_ADSTART=0
+	ENDC
 	IFND	NO_REL11	; 1 = 1.0 version texts
 NO_REL11=0
 	ENDC
@@ -436,6 +508,7 @@ SCANDEF=0
 	ENDC
 TallOff=NO_TALLMENU|NO_RTG|NO_RTGFIX	; the tall menu code is in RTG.asm
 DispOff=NO_MENU2|NO_RTG|NO_RTGFIX	; the menu's Display gadget (AGA / RTG for each Power ON): code in RTG.asm
+OcsRtgOff=NO_OCSRTG|DispOff	; an Amiga without AGA runs on RTG (Menu.asm ChipAga, RTG.asm RtgStart)
 ChoosOff=NO_CHOOSER|NO_MENU2	; the menu's settings as chooser.gadget pop-ups (Menu.asm, GadToolsBox.asm)
 RtgBlankOff=NO_RTGBLANK|NO_MENU2	; RtgTakeover: no bitplanes on the AGA side while the game plays on RTG (RTG.asm)
 ; Menu drawing calls: through RTG.asm's Tall* helpers (double height on RTG, else as they were)
@@ -521,6 +594,12 @@ NF_Menu:
 	JSR	AgcStart
 	ENDC
 	ENDC
+	IFNE	EmbedNtsc
+	CLR.W	$DFF1DC			; NTSC screen
+	IFEQ	NO_NTSCRATE
+	CLR.W	BeamMode
+	ENDC
+	ENDC
 	IFNE	AutoExit
 	MOVEM.L	D0-D7/A0-A6,-(SP)
 	JSR	MemCheckInit	; guard blocks + stack fill, checked by AutoWriteResult
@@ -545,7 +624,11 @@ NF_Menu:
 	IFEQ	NO_REL14
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
+	IFEQ	NO_REL22
+	DC.B	"$VER:AmiPC-Engine Emulator v2.2 (17.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.1 (14.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.0 (12.11.26)",0,0
 	ENDC
@@ -578,12 +661,31 @@ EmulatorStart:
 ; -=-=-
 	LEA	DirPrefs,A5
 	IFEQ	NO_MENU2
+	IFNE	NO_CD32KIT
 	MOVE.B	$16(A5),D0		; port 1: 0 none, 1 joystick, 2 CD32 pad, 3 joypad
 	AND.W	#$0003,D0
 	MOVE.L	(PadPrg1,D0.W*4),PadRut1
 	MOVE.B	$08(A5),D0		; port 2: 0 joystick, 1 none, 2 CD32 pad, 3 joypad (Juan's order)
 	AND.W	#$0003,D0
 	MOVE.L	(PadPrg2,D0.W*4),PadRut2
+	ELSE
+	MOVEQ	#0,D0
+	MOVE.B	$16(A5),D0		; port 1: 0 none, 1 joystick, 2 CD32 pad, 3 joypad, 4 KTRL CD32+
+	CMP.W	#PadTypes-1,D0
+	BLS.S	.pt1
+	MOVEQ	#0,D0
+.pt1:	MOVE.L	(PadPrg1,D0.W*4),PadRut1
+	MOVEQ	#0,D0
+	MOVE.B	$08(A5),D0		; port 2: 0 joystick, 1 none, 2 CD32 pad, 3 joypad (Juan's order), 4 KTRL CD32+
+	CMP.W	#PadTypes-1,D0
+	BLS.S	.pt2
+	MOVEQ	#0,D0
+.pt2:	MOVE.L	(PadPrg2,D0.W*4),PadRut2
+	IFNE	PadForce
+	MOVE.L	#PadKL1,PadRut1
+	MOVE.L	#PadCD2,PadRut2
+	ENDC
+	ENDC
 	MOVE.L	#LeePads,JoyControlRut
 	ELSE
 	MOVE.B	$08(A5),D0
@@ -612,6 +714,12 @@ EmulatorStart:
 	JSR	CongelaAMIGA
 	IFEQ	NO_RTG
 	JSR	RtgTakeover		; RTG: bitplane, copper and sprite DMA off
+	ENDC
+	IFEQ	CdSndOff
+	TST.B	CdOn
+	BEQ.S	CdMixNo
+	ST	PSGMixOn		; a CD game: everything through the mix, AGA or RTG
+CdMixNo:
 	ENDC
 
 	JSR	InitPSG
@@ -933,6 +1041,13 @@ BUC:
 	MOVE.L	#MenuAuto,MenuAutoCnt
 	ST	ExitToMenu		; as Esc
 .noMenuAuto:
+	ENDC
+	IFNE	LupaTest
+	SUBQ.L	#1,LupaTestCnt
+	BNE.S	.noLupaTest
+	MOVE.L	#LupaTest,LupaTestCnt
+	ST	ExitToMenu		; as Esc
+.noLupaTest:
 	ENDC
 
 	IFNE	AutoExit
@@ -1374,6 +1489,12 @@ AutoWriteResult:
 	IFNE	StripLog
 	JSR	StripLogWrite
 	ENDC
+	IFNE	MixDump
+	JSR	MixDumpWrite
+	ENDC
+	IFNE	AdDump
+	JSR	AdDumpWrite
+	ENDC
 	IFNE	ProfOn
 	BSR	ProfWrite		; before the result: the rig stops once that file is there
 	ENDC
@@ -1393,6 +1514,17 @@ AutoWriteResult:
 	BSR	AutoHex
 	LEA	AutoHex4,A0
 	MOVE.L	AutoStackSize,D0
+	IFNE	EmbedNtsc
+	IFEQ	NO_NTSCRATE
+	MOVEQ	#0,D1			; (test builds) the programmed frame's lines - 200 in the top byte
+	MOVE.W	BeamLines,D1		; (BeamExact is off again by now)
+	BEQ.S	.nbx
+	SUB.W	#200,D1
+	ROR.L	#8,D1
+	ADD.L	D1,D0
+.nbx:
+	ENDC
+	ENDC
 	BSR	AutoHex
 	LEA	AutoGuardTab,A1		; guards: first bad long << 16 | bad longs
 	LEA	AutoHex5,A2
@@ -1428,6 +1560,23 @@ AutoWriteResult:
 	IFNE	DdaStat
 	JSR	DdaStatFill
 	ENDC
+	IFNE	PadForce
+	LEA	PadStH1,A0
+	MOVE.L	PadReads,D0
+	BSR	AutoHex
+	LEA	PadStH2,A0
+	MOVE.L	PadId1,D0
+	BSR	AutoHex
+	LEA	PadStH3,A0
+	MOVE.L	PadId2,D0
+	BSR	AutoHex
+	LEA	PadStH4,A0
+	MOVE.L	PadBtn,D0
+	BSR	AutoHex
+	ENDC
+	IFNE	SndStat
+	JSR	MixStatFill
+	ENDC
 	IFNE	DbgRows
 	JSR	DbgAutoFill
 	ENDC
@@ -1451,6 +1600,17 @@ AutoWriteResult:
 	MOVE.L	D4,D1
 	MOVE.L	#DdaStatTxt,D2
 	MOVE.L	#DdaStatEnd-DdaStatTxt,D3
+	JSR	-48(A6)			; Write
+	ENDC
+	IFNE	PadForce
+	MOVE.L	D4,D1
+	MOVE.L	#PadStTxt,D2
+	MOVE.L	#PadStEnd-PadStTxt,D3
+	ENDC
+	IFNE	SndStat
+	MOVE.L	D4,D1
+	MOVE.L	#MixStatTxt,D2
+	MOVE.L	#MixStatEnd-MixStatTxt,D3
 	JSR	-48(A6)			; Write
 	ENDC
 	IFNE	DbgRows
@@ -2028,6 +2188,19 @@ DdaStH12:	DC.B	"00000000",10
 DdaStatEnd:
 	EVEN
 	ENDC
+	IFNE	PadForce
+PadStTxt:	DC.B	"pads reads=$"
+PadStH1:	DC.B	"00000000 id1=$"
+PadStH2:	DC.B	"00000000 id2=$"
+PadStH3:	DC.B	"00000000 pressed=$"
+PadStH4:	DC.B	"00000000",10
+PadStEnd:
+	CNOP	0,4
+PadReads:	DC.L	0
+PadId1:	DC.L	0
+PadId2:	DC.L	0
+PadBtn:	DC.L	0
+	ENDC
 AutoFileName:	DC.B	"PROGDIR:AmiPCE.result",0
 AutoText:	DC.B	"frames=$"
 AutoHex1:	DC.B	"00000000 vblanks=$"
@@ -2346,6 +2519,102 @@ DameVBR:MOVEC	VBR,A0
 	MOVE.L	A0,VBRPun
 	NOP
 	RTE
+
+	IFEQ	NO_NTSCRATE
+; BeamSet (CongelaAMIGA, just after a vblank): the NTSC screen on a PAL Amiga. The chipset's NTSC
+; frame is 263 lines of 227.5 colour clocks, timed by the PAL crystal (3546895 colour clocks a
+; second): 59.28 Hz, and the emulation runs one PC Engine frame (59.83 Hz) per Amiga frame, so
+; everything ran 0.9% slow. A programmed frame (VARBEAMEN, LOLDIS) of 262 lines of 226 colour
+; clocks is 59.90 Hz: NTSC's own line count, each line 1.5 colour clocks shorter. The syncs and
+; blanking stay NTSC's hardwired ones, and the picture (lines $1D-$104) and the window's stop line
+; ($105) fall in the frame as on the plain NTSC screen. Not on an NTSC chip (VPOSR bit 12: its NTSC frame is already 59.83 Hz) or a
+; PAL screen. VTOTAL is the last line of a short frame; a long one (LOF, as the OS leaves it) has
+; one more. If the beam goes past VTOTAL+1 in 4 frames the chipset has no programmed beam: back
+; to the plain NTSC frame.
+; BeamExact: the programmed frame runs, BeamLines lines (SndStart, PSGDdaInit).
+; A6 = $DFF000. 5 frames.
+BeamSet:
+	MOVEM.L	D0-D4,-(SP)
+	SF	BeamExact
+	IFNE	SndStat
+	MOVE.W	BeamMode,BeamTop	; (test builds: why not; $20 = PAL screen, $1000 = NTSC chip)
+	ADD.W	#1,BeamCalls
+	ENDC
+	TST.W	BeamMode
+	BNE	.x			; PAL screen
+	IFNE	SndStat
+	MOVE.W	#$1000,BeamTop
+	ENDC
+	BTST	#4,$04(A6)		; VPOSR bit 12: NTSC chip
+	BNE	.x
+	MOVE.W	#BeamCC-1,$1C0(A6)	; HTOTAL
+	MOVE.W	#BeamLn-2,$1C8(A6)	; VTOTAL: 261 lines, 262 in a long frame
+	MOVE.W	#$0880,$1DC(A6)		; BEAMCON0: LOLDIS, VARBEAMEN, NTSC
+	ST	BeamExact
+	BSR.S	.beam
+.w:	MOVE.W	D0,D1			; to the end of this frame
+	BSR.S	.beam
+	CMP.W	D1,D0
+	BCC.S	.w
+	MOVEQ	#0,D3			; then the highest line of 4 frames (a slow poll can miss
+	MOVEQ	#4-1,D4			; the last lines of one; an unprogrammed frame reaches 262)
+.f:	MOVEQ	#0,D2
+.t:	CMP.W	D2,D0
+	BLS.S	.n
+	MOVE.W	D0,D2
+.n:
+	IFNE	SndStat
+	MOVE.B	$07(A6),D1		; (test builds) the highest horizontal count seen
+	CMP.B	BeamHMax,D1
+	BLS.S	.h
+	MOVE.B	D1,BeamHMax
+.h:
+	ENDC
+	MOVE.W	D0,D1
+	BSR.S	.beam
+	CMP.W	D1,D0
+	BCC.S	.t
+	CMP.W	D2,D3
+	BCC.S	.k
+	MOVE.W	D2,D3
+.k:	DBF	D4,.f
+	IFNE	SndStat
+	MOVE.W	D3,BeamTop
+	ENDC
+	CMP.W	#200,D3
+	BCS.S	.no
+	CMP.W	#BeamLn-1,D3
+	BHI.S	.no
+	MOVE.W	#BeamLn-1,D2		; the programmed frame: 261 lines, 262 when long
+	BTST	#7,$04(A6)		; VPOSR bit 15: LOF
+	BEQ.S	.s
+	ADDQ.W	#1,D2
+.s:	MOVE.W	D2,BeamLines
+	BRA.S	.x
+.no:	MOVE.W	BeamMode,$1DC(A6)	; no programmed beam here: the plain NTSC frame
+	SF	BeamExact
+.x:	MOVEM.L	(SP)+,D0-D4
+	RTS
+.beam:	MOVE.L	D1,-(SP)		; the line, read twice alike (the two halves of a read can
+.r:	MOVE.L	$04(A6),D0		; straddle a line change: 255 -> 256 reads as 0)
+	MOVE.L	$04(A6),D1
+	EOR.L	D0,D1
+	AND.L	#$1FF00,D1
+	BNE.S	.r
+	LSR.L	#8,D0
+	AND.W	#$1FF,D0
+	MOVE.L	(SP)+,D1
+	RTS
+BeamMode:	DC.W	$20	; BEAMCON0 for the menu's Screen setting: 0 = NTSC, $20 = PAL (play start)
+BeamExact:	DC.B	0,0	; BeamSet's programmed frame runs
+BeamLines:	DC.W	0	; its lines (BeamSet)
+	IFNE	SndStat
+BeamTop:	DC.W	0	; the highest line BeamSet saw
+BeamHMax:	DC.B	0,0	; and horizontal count
+BeamCalls:	DC.W	0
+	ENDC
+	ENDC
+
 	CNOP	0,8
 CongelaAMIGA:
 ;;	-=-=-=-==-=-=-=-=-=-=-
@@ -2442,6 +2711,9 @@ EspIntV:NOP
 	BTST	#$05,$01F(A6)
 	BEQ.S	EspIntV
 	NOP
+	IFEQ	NO_NTSCRATE
+	BSR	BeamSet			; (just after the vblank)
+	ENDC
 	MOVE.W	#$83A0,$096(A6)	; ---,BLTPriDMA,BPL;COP,BLT,SPR,DSK;AUD3-0
 ;;	-=-=-=-==-=-=-=-=-=-=-
 	SF	$BFEC01
@@ -2518,6 +2790,12 @@ Salir:
 	ENDC
 
 DescongelaAMIGA:
+	IFEQ	MixOff
+	TST.B	PSGMixOn
+	BEQ.S	.noMix
+	JSR	MixStop			; Paula stopped while frozen
+.noMix:
+	ENDC
 ;;	-=-=-=-==-=-=-=-=-=-=-
 	MOVE.B	Filtro,D7
 	LEA	$BFE001,A6
@@ -2546,6 +2824,13 @@ DescongelaAMIGA:
 	MOVE.W	D7,$09C(A6)
 	NOP
 ;;	-=-=-=-==-=-=-=-=-=-=-
+	IFEQ	NO_NTSCRATE
+	TST.B	BeamExact
+	BEQ.S	.nb
+	MOVE.W	BeamMode,$1DC(A6)	; the plain NTSC frame again, as before BeamSet
+	SF	BeamExact
+.nb:
+	ENDC
 	CLR.W	$180(A6)
 	MOVE.L	WBCopp,$80(A6)
 	NOP
@@ -2676,6 +2961,10 @@ RunCopperScrolls:
 	TST.B	RtgOn
 	BEQ.S	.agaVbl
 	CLR.L	Regs+ScrollChangesToRender	; RTG: no copper list, no copper colours
+	IFEQ	MixOff
+	TST.B	PSGMixOn
+	BNE	RtgVblMix		; the voices are the mix's
+	ENDC
 	BRA	RtgVblPal
 .agaVbl:
 	ENDC
@@ -2877,7 +3166,14 @@ gemmy:
 RtgVblPal:
 	ENDC
 
+	IFEQ	MixOff
+	TST.B	PSGMixOn
+	BNE.S	RtgVblMix		; AGA too: the voices are the mix's
+	ENDC
 	BSR	TocaPSG
+	IFEQ	MixOff
+RtgVblMix:
+	ENDC
 
 
 	JSR	([JoyControlRut.w,PC])
@@ -3523,8 +3819,13 @@ LeePads:
 	CNOP	0,4
 PadRut1:	DC.L	PadNone
 PadRut2:	DC.L	PadJoy2
+	IFNE	NO_CD32KIT
 PadPrg1:	DC.L	PadNone,PadJoy1,PadCD1,PadPad1	; port 1 (prefs $16, the menu's order)
 PadPrg2:	DC.L	PadJoy2,PadNone,PadCD2,PadPad2	; port 2 (prefs $08, Juan's order)
+	ELSE
+PadPrg1:	DC.L	PadNone,PadJoy1,PadCD1,PadPad1,PadKL1	; port 1 (prefs $16, the menu's order)
+PadPrg2:	DC.L	PadJoy2,PadNone,PadCD2,PadPad2,PadKL2	; port 2 (prefs $08, Juan's order)
+	ENDC
 
 PadNone:
 	RTS
@@ -3623,8 +3924,73 @@ PadCdM:	MACRO
 	CD32M	4,D3	; button I	(Blue)
 	RTS
 	ENDM
+	IFNE	NO_CD32KIT
 PadCD2:	PadCdM	$DFF00C,7,14,$6F00
 PadCD1:	PadCdM	$DFF00A,6,10,$F600
+	ELSE
+; CD32 pad through the kit's cd32read: "CD32 Joypad" (PadCDx, pin 6 idles high) or "KTRL CD32+"
+; (PadKLx, the low clock). Play = Run, both shoulders = back to the menu.
+PadCD2:	BSR.S	PadDir2
+	MOVEQ	#2,D0
+	MOVEQ	#0,D1
+	BRA.S	PadKit
+PadKL2:	BSR.S	PadDir2
+	MOVEQ	#2,D0
+	MOVEQ	#2,D1
+	BRA.S	PadKit
+PadCD1:	BSR.S	PadDir1
+	MOVEQ	#1,D0
+	MOVEQ	#0,D1
+	BRA.S	PadKit
+PadKL1:	BSR.S	PadDir1
+	MOVEQ	#1,D0
+	MOVEQ	#1,D1
+	BRA.S	PadKit
+PadDir2:	MOVE.W	$DFF00C,D0		; JOY1DAT
+	BRA	PadDirs
+PadDir1:	MOVE.W	$DFF00A,D0		; JOY0DAT
+	BRA	PadDirs
+PadKit:	BSR	cd32read		; D0 = port 2's buttons, D1 = port 1's (the other is 0)
+	IFNE	PadForce
+	ADDQ.L	#1,PadReads
+	MOVE.W	D0,D2
+	AND.W	#$180,D2
+	CMP.W	#$100,D2		; a CD32 pad's ID: bit 7 = 0, bit 8 = 1
+	BNE.S	.i2
+	ADDQ.L	#1,PadId2
+.i2:	MOVE.W	D1,D2
+	AND.W	#$180,D2
+	CMP.W	#$100,D2
+	BNE.S	.i1
+	ADDQ.L	#1,PadId1
+.i1:	MOVE.L	D0,D2
+	OR.L	D1,D2
+	AND.W	#$7F,D2
+	BEQ.S	.i0
+	ADDQ.L	#1,PadBtn		; a button seen pressed
+.i0:
+	ENDC
+	OR.L	D1,D0
+	AND.W	#$007F,D0		; the seven buttons (the ID bits dropped)
+	CMP.B	#$7F,D0			; all seven at once: a plain joystick, nothing
+	BEQ.S	PadKitX
+	BTST	#6,D0
+	BEQ.S	.np
+	BSET	#7,D3			; Play = Run
+.np:	MOVE.B	D0,D1
+	AND.B	#$30,D1
+	CMP.B	#$30,D1			; both shoulders = back to the menu
+	BNE.S	.nm
+	ST	SalirMenu(A3)
+.nm:	CD32M	4,D3	; blue = button I
+	CD32M	5,D3	; red = button II
+	CD32M	7,D3	; yellow = Run
+	CD32M	6,D3	; green = Select
+	CD32M	5,D3	; right shoulder = button II
+	CD32M	4,D3	; left shoulder = button I
+PadKitX:	RTS			; (a global label: CD32M's own labels end the local ones)
+	INCLUDE	"CD32Read.asm"
+	ENDC
 	ENDC
 
 ;***********************************************************************
@@ -4158,6 +4524,10 @@ ProfCodeEnd:			; end of the code hunk (profiler histogram range)
 	CNOP	0,8
 MasterCopper_AGA:
 		DC.W	$01FC,$000D
+	IFEQ	NO_NTSCRATE
+		DC.W	$0100,$0000	; no planes until CopTopWait (on a programmed frame that ends before the window's
+					; stop line, $105, the fetch would run on into the next frame's top lines)
+	ENDC
 DIRSPRIT0:	DS.W	4
 DIRSPRIT1:	DS.W	4
 DIRSPRIT2:	DS.W	4
@@ -4636,6 +5006,10 @@ GameCartEnd:
 	IFD	EMBED
 	MemGuard JuegoB
 	ENDC
+	IFND	EMBED		; AutoExit builds without a ROM inside: the guards' names still there
+	MemGuard JuegoA
+	MemGuard JuegoB
+	ENDC
 	IFD	EMBED2
 	CNOP	0,8
 GameCart2:
@@ -4650,4 +5024,13 @@ GameCart2End:
 	IFNE	AGC
 	INCLUDE	"AGCvars.asm"
 	ENDC
+	ENDC
+	IFEQ	NO_CD
+	INCLUDE	"CDvars.asm"	; own BSS section
+	ENDC
+	IFEQ	NO_SNDOUT
+	INCLUDE	"SndOut.asm"	; own sections
+	ENDC
+	IFEQ	MixOff
+	INCLUDE	"PSGMix.asm"	; own sections
 	ENDC

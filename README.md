@@ -2,8 +2,10 @@
 
 AmiPCEngine is a PC Engine / TurboGrafx-16 emulator for AGA Amigas, by
 Juan Antonio Gomez Galvez and z00p, written in 68020+ assembly. It plays HuCard
-games (`.pce` files) and drives the Amiga's custom chips directly, or a
-Picasso96 (RTG) screen such as a PiStorm's HDMI output.
+games (`.pce` files) and, in beta, CD-ROM games (a `.cue` with BIN or ISO
+files), and drives the Amiga's custom chips directly, or a
+Picasso96 (RTG) screen such as a PiStorm's HDMI output. Without AGA (an A500
+with a PiStorm, for example) it runs on RTG.
 
 No games are included. Bring HuCard images you may legally have.
 
@@ -41,8 +43,8 @@ manual is [docs/package/ReadMe.txt](docs/package/ReadMe.txt): requirements,
 the menu, keys and pads, and the limits.
 
 Tested by us on an A1200 with a PiStorm (RTG and AGA) and in WinUAE. Not
-tested on a real 68060 card. Not all games work. Not
-supported: CD-ROM games, SuperGrafx.
+tested on a real 68060 card. Not all games work. CD-ROM games are in beta.
+Not supported: Arcade Card games, SuperGrafx.
 
 ## Building
 
@@ -64,7 +66,7 @@ supported: CD-ROM games, SuperGrafx.
   default. The switch block is at the top of `src/Main.asm`. `-DDbgRows=1`
   draws timing rows at the top of the screen
   (see `docs/package/Debug rows.txt`).
-- Release package: `python tools/make_release.py --build --version 2.1`
+- Release package: `python tools/make_release.py --build --version 2.2`
   builds the release binary and stages the drawer; the archive is made with
   the Amiga's own `lha`.
 
@@ -81,14 +83,15 @@ supported: CD-ROM games, SuperGrafx.
 ## Credit
 
 - **AmiPCEngine:** Juan Antonio Gomez Galvez (GUS Entertainment).
-- **Versions 1.0 to 2.1:** z00p.
+- **Versions 1.0 to 2.2:** z00p.
 - **Web and menu graphics:** Multivac.
+- **CD32 pad reading:** Afrotechmods / FAmiga.
 - **Thanks:** Zener and Sandman, and reassembler for his guidance and direction.
 - Menu code made with Devpac III (HiSoft) and GadToolsBox (Jaba Development).
 
 ## Licence
 
-AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 2.1, by
+AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 2.2, by
 z00p, are community updates made and published with his permission. See [NOTICE.md](NOTICE.md).
 
 ## Trademarks

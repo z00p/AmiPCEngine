@@ -20,8 +20,12 @@ Contents
 - An AGA Amiga (A1200, A4000) with AmigaOS 3.0 or later and a fast
   CPU: an A1200 with a PiStorm, a fast 68060, or a machine of that
   class. On a 68030 or a stock 68020 the games run far below full
-  speed, so they are not supported. Without a 68020 and AGA the
-  program says "MC68020+ and AGA required!".
+  speed, so they are not supported.
+- Without AGA (an A500 or A2000 with a PiStorm, for example) it runs
+  on RTG only: Picasso96 and a 16-bit screen mode. The Display
+  setting stays on RTG.
+- Without a 68020, or with neither AGA nor RTG, the program says
+  "Needs 68020+ and AGA or RTG!".
 - Speed, on an A1200 with a PiStorm (12 November 2026, eight test
   games, 1500 to 2400 frames each): all eight at full speed on RTG;
   on AGA seven at full speed and HuZERO in play at 99%.
@@ -97,15 +101,54 @@ ToolTypes (in the icon's Information window):
              gadget; it is kept by Save Prefs. An RTGMODE ToolType or
              Shell word wins over the saved prefs. If the mode can't
              be opened, the automatic choice is used instead.
+  CDMUSIC=<percent>
+             CD games: the CD music's level in the sound mix, as a
+             percentage of the disc's own level, 0 to 400. The
+             default is 200. Loud tracks may clip at 200 or more.
 
 From a Shell: AGA RTG   (the word RTG, as the ToolType)
               AGA RTG SCANLINES=50
               AGA RTG RTGMODE=800x600
+              AGA CDMUSIC=150
+
+Starting a game straight away (from a Shell, a script or a game
+launcher such as Lupa):
+
+  AGA [HuCard] [AGA|RTG] [ONEGAME] [MENU] [PROFILE=030|FAST|AUTO]
+
+  HuCard     the file to load: the first word that isn't one of
+             these, or a "quoted" name (with spaces). It is loaded as
+             Insert would and started at once.
+  AGA / RTG  the display for this run, over the RTG ToolType.
+  ONEGAME    leaving the game (Esc, Help, or both CD32 shoulder
+             buttons) quits the program, after the game is saved, so
+             you go straight back to the launcher. A HuCard that
+             can't be loaded shows the error, then quits.
+  MENU       load the HuCard but stay in the menu.
+  PROFILE=   accepted for launchers that use it; this program has
+             one profile (030 still runs, with return code 5).
+
+  For example:
+    AGA "Work:PC Engine/Homebrew/HuZERO.pce" RTG ONEGAME
+
+A HuCard project icon whose default tool is the AGA program (with its
+full path) works the same way, and its ToolTypes may hold RTG, AGA,
+ONEGAME and MENU.
+
+Return codes (for scripts and launchers): 0 normal, 5 ran with a
+fallback (RTG asked for but not available, or PROFILE=030), 10 the
+HuCard could not be loaded (with ONEGAME), 20 this Amiga can't run
+the program (no 68020, or neither AGA nor RTG).
 
 On RTG the screen starts in NTSC (60 Hz), the PC Engine's own rate,
 unless the menu's Screen gadget (or your saved prefs) says PAL. On PAL
 (50 Hz) the games run at 5/6 speed, and text a game redraws in
 mid-frame can look rough. The AGA screen is always NTSC.
+
+On a PAL Amiga the NTSC screen runs a programmed frame of 262 lines
+at 59.90 Hz, close to the PC Engine's 59.83 Hz. (The chipset's own
+NTSC frame on a PAL Amiga is 59.28 Hz, and up to 2.1 games ran 0.9%
+slow.) An NTSC Amiga uses its own NTSC frame, which is already right.
 
 The AGA picture is 336 pixels wide, so wide games such as R-Type fit,
 and 232 lines high: the bottom 8 lines of a 240-line game are cut. RTG
@@ -117,6 +160,7 @@ shows all of them.
 Insert         opens a file requester on the Homebrew drawer. Pick a
                .pce file. A 512-byte copier header is skipped. XPK
                files are unpacked if xpkmaster.library is there.
+               A .cue file loads a CD-ROM game (see CD-ROM in 7).
 Power ON       starts the game from the beginning.
 Continue       goes back into the game you left with Esc.
 Exit           back to Workbench.
@@ -179,6 +223,12 @@ either can be used, or both at once.
                     Start as Play), Forward = II, Rewind = I,
                     both shoulder buttons together = back to the menu
   Std Joypad        as Joystick, and fire 3 (pin 5) = Run
+  KTRL CD32+        as CD32 Joypad, with the pad clocked the other
+                    way round. Try it when a CD32 pad or adapter
+                    misses or mixes up buttons on CD32 Joypad (the
+                    KTRL CD32+ and the Mega Multi adapter in CD32
+                    mode want it; the first KTRL CD32 wants CD32
+                    Joypad)
 The first start has port 1 on None and port 2 on Joystick.
 
 Juan's built-in debugger (keys P, T and S) is not in this program.
@@ -204,8 +254,35 @@ Tested
     a CD32, RTG boards other than the PiStorm's.
   Not all games work.
 
+CD-ROM (beta)
+  CD-ROM and Super CD-ROM games load from a CUE sheet with BIN (2352-
+  byte sectors) or ISO (2048) files: pick the .cue with Insert, or
+  give it on the command line. A CHD image has to be converted first,
+  on a PC with MAME's chdman:
+    chdman extractcd -i game.chd -o game.cue -ob game.bin
+  * The System Card is needed: cd_bios.rom or syscard3.pce next to the
+    .cue, or syscard3.pce or cd_bios.rom in the AmiPCEngine drawer.
+    Use System Card 3.0 (it also runs Super CD-ROM games). A US card
+    dump is turned round on loading.
+  * The disc is read into RAM before the game starts, each file once
+    from start to end: the data tracks (a few MB up to about 30 MB)
+    and the CD music, at about half its size in the BIN file. Gradius
+    II (a 520 MB BIN) takes about 40 seconds over a network share on
+    a PiStorm A1200. Use a machine with plenty of Fast RAM: when it
+    runs out, the rest of the music stays silent.
+  * CD music and ADPCM speech play. A CD game sends all its sound,
+    the PSG too, through the software mix, on AGA and RTG. The music
+    level is the CDMUSIC ToolType.
+  * All CD games share one save file, "CD-ROM System", as the CD
+    unit's backup RAM does on the console.
+  * Gradius II, Star Parodier, Gate of Thunder and Rainbow Islands
+    play with music and speech on a PiStorm A1200; Castlevania -
+    Rondo of Blood, Valis II and Fighting Street in WinUAE.
+  * ADPCM speech matches the Mesen emulator's sample for sample in
+    Gate of Thunder.
+
 Not supported (there is no code for them)
-  * CD-ROM, Super CD-ROM and Arcade Card games. HuCards only.
+  * Arcade Card games.
   * SuperGrafx games (no second VDC or priority chip).
   * The sprite overflow and collision flags, multitap, the 6-button
     pad.
@@ -253,7 +330,8 @@ Known faults
          RTG screen, and full speed on an A1200 with a PiStorm.
          Version 1.0 came out on 31 October, 1.1 on 2 November,
          1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November,
-         2.0 on 12 November and 2.1 on 14 November.
+         2.0 on 12 November, 2.1 on 14 November and 2.2 on 15
+         November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -267,8 +345,9 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 2.1    z00p
+  Versions 1.0 to 2.2    z00p
   Web and menu graphics  Multivac
+  CD32 pad reading       Afrotechmods / FAmiga
   With thanks to         Zener and Sandman, and reassembler for his
                          guidance and direction
   Built with             Devpac III (HiSoft) and GadToolsBox (Jaba
@@ -283,7 +362,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 2.1, by z00p, are community updates
+Entertainment). Versions 1.0 to 2.2, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

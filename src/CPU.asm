@@ -388,6 +388,9 @@ CheckInterrupt:
 	ENDC
 	BTST	#1,IOAM+$1402		; IRQ1 Interrupt Enabled? == 0
 	BEQ.S	CheckIRQ1Interrupt
+	IFEQ	NO_CD
+	BRA.S	CheckIRQ2
+	ENDC
 NoInterrupt:
 	RTS
 
@@ -396,7 +399,19 @@ CheckIRQ1Interrupt:
 ;	MOVE.W	#$FFF,$DFF180
 
 	BCLR	#1,IRQ_Pending(A3)	; IRQ1 Interrupt Pending? == 1
+	IFEQ	NO_CD
+	BNE.S	CheckIRQ1Take
+CheckIRQ2:				; IRQ2 (the CD unit): last, a level (the CD clears it)
+	BTST	#0,IRQ_Pending(A3)
 	BEQ.S	NoInterrupt
+	BTST	#0,IOAM+$1402
+	BNE.S	NoInterrupt
+	MOVE.W	#$FFF6,IntVector
+	BRA.S	TakeInterrupt
+CheckIRQ1Take:
+	ELSE
+	BEQ.S	NoInterrupt
+	ENDC
 	IFEQ	NO_TIMER
 	MOVE.W	#$FFF8,IntVector
 TakeInterrupt:
@@ -1891,7 +1906,11 @@ CLInn:
 	MOVE.B	IOAM+$1402,D1
 	NOT.B	D1
 	AND.B	IRQ_Pending(A3),D1
+	IFEQ	NO_CD
+	AND.B	#$07,D1			; (IRQ2 too)
+	ELSE
 	AND.B	#$06,D1
+	ENDC
 	BNE.S	CliWait
 	NextOP	2
 CliWait:

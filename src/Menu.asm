@@ -87,12 +87,21 @@ YaStc20:
 	MOVE.L	(A0),D1
 	JSR	-$7E(A6)
 CLI:
+	IFEQ	OcsRtgOff
+	BSR	ChipAga			; before RtgStart: no AGA chipset = RTG only
+	ENDC
+	IFEQ	NO_LUPA
+	BSR	LupaArgs		; a game named on the command line or by a project icon
+	ENDC
 	IFEQ	NO_MENU2
 	BSR	LoadPrefs		; before RtgStart: the prefs' Display setting
 	ENDC
 	IFEQ	NO_RTG
 	MOVE.L	MENSWB(PC),A0		; RTG: ToolType or CLI word, the P96 modes
 	JSR	RtgStart
+	IFEQ	NO_LUPA
+	BSR	LupaRtgCheck		; RTG asked for, not there: return code 5
+	ENDC
 	IFNE	AGC
 	JSR	AgcStart		; AGA chunky mode test builds: its buffers (no RTG wanted)
 	ENDC
@@ -105,6 +114,9 @@ CLI:
 ; <=-----------------------=>
 
 	BSR	Programa
+	IFEQ	NO_CD
+	JSR	CdFree
+	ENDC
 
 ; <=-----------------------=>
 	MOVE.L	BucCart(PC),D0
@@ -156,6 +168,9 @@ LibsError:
 	LiberaLib _ChooserBase
 	ENDC
 MenuRET:
+	IFEQ	NO_LUPA
+	MOVE.L	LupaRC,D0		; the return code
+	ENDC
 	RTS
 ; <=-----------------------=>
 
@@ -323,13 +338,25 @@ Programa:
 	ENDC
 ; ------------------------------------------
 
+	IFEQ	OcsRtgOff
+	BSR	AgaCheck
+	ELSE
 	BSR	MiraAGA
+	ENDC
 	TST.L	D0
+	IFNE	NO_LUPA
 	BEQ	Quitar
+	ELSE
+	BEQ	LupaNoRun		; return code 20
+	ENDC
 
 	BSR	MC68020
 	TST.L	D0
+	IFNE	NO_LUPA
 	BEQ	Quitar
+	ELSE
+	BEQ	LupaNoRun
+	ENDC
 
 ;;	BSR	CheckAGA
 
@@ -358,11 +385,11 @@ Programa:
 	BSR	SetCycle
 	BSR	DispSel
 	ENDC
-	IFNE	PadTest			; test builds: port 1 = CD32 pad, port 2 = joypad (both read every frame)
-	MOVEQ	#2,D0
+	IFNE	PadTest			; test builds: port 1 = CD32 pad, port 2 = joypad (both read every frame); 2: KTRL CD32+, CD32 pad
+	MOVEQ	#2+(PadTest-1)*2,D0
 	MOVE.W	#GD_JoyPort,D1
 	BSR	SetCycle
-	MOVEQ	#3,D0
+	MOVEQ	#3-(PadTest-1),D0
 	MOVE.W	#GD_JoyType,D1
 	BSR	SetCycle
 	BSR	ImpJoyType
@@ -566,6 +593,9 @@ ContinueCon:
 	BNE.S	NoEsNTSC
 	MOVE.W	#$20,D1
 NoEsNTSC:MOVE.W	D1,$DFF1DC
+	IFEQ	NO_NTSCRATE
+	MOVE.W	D1,BeamMode		; (CongelaAMIGA: BeamSet)
+	ENDC
 ; -=-=-
 	IFD	NF_Menu
 	IFEQ	NO_RTG|NO_RTGFIX
@@ -622,6 +652,10 @@ DesborPILA:	DC.B	0			; *\*\*  POR QUITAR  */*/*
 
 	CNOP	0,8
 Eject:
+	IFEQ	NO_CD
+	JSR	CdFree
+	SF	CdOn
+	ENDC
 	TST.L	BucCart(PC)
 	BEQ	EjNoHayCart
 
@@ -683,6 +717,16 @@ Insert:
 	MOVE.L	InsReqBase,A2
 	BSR	ArreglaNom
 InsertLoad:			; FileNom set: load it (MenuAuto test builds come in here)
+	IFEQ	NO_CD
+	JSR	CdInsert		; a .cue: the disc into RAM, FileNom = the System Card
+	TST.L	D0
+	BEQ.S	.cdOk
+	IFEQ	NO_LUPA
+	ST	LupaErr
+	ENDC
+	BRA	ImpError
+.cdOk:
+	ENDC
 
 
 ;	--------------------
@@ -860,6 +904,9 @@ SiRawCartSize:
 ; -=-=-=-
 
 	MOVE.L	#tNomFileCart,MainMenuText12+$C
+	IFEQ	NO_CD
+	JSR	CdInserted		; the disc goes in (its System Card loaded), or out (a HuCard)
+	ENDC
 
 	MOVEQ	#-1,D1
 	MOVE.W	PagCart,D0
@@ -876,10 +923,33 @@ InCalRom1:
 ; -=-=-=-
 
 
+	IFEQ	NO_CD
+	TST.B	CdOn
+	BNE.S	InsNomCd		; a disc: CdShowName put the .cue's name there
+	ENDC
+	IFEQ	NO_LUPA
+	LEA	FileNom,A0		; the file part of the path (Insert or the command line)
+	MOVE.L	A0,A1
+InsNomP:
+	MOVE.B	(A1)+,D0
+	BEQ.S	InsNomE
+	CMP.B	#'/',D0
+	BEQ.S	InsNomD
+	CMP.B	#':',D0
+	BNE.S	InsNomP
+InsNomD:
+	MOVE.L	A1,A0
+	BRA.S	InsNomP
+InsNomE:
+	ELSE
 	MOVE.L	InsReqBase,A2
 	MOVE.L	4(A2),A0
+	ENDC
 	LEA	tNomFileCart,A1
 	BSR	PONOM
+	IFEQ	NO_CD
+InsNomCd:
+	ENDC
 	IFEQ	NO_MENU2|NO_BRAMSAVE
 	BSR	BramFind		; the Backup RAM text: is there a save for this game?
 	ENDC
@@ -1076,22 +1146,41 @@ MenuAutoWhich:	DC.B	0
 	CNOP	0,4
 	ENDC
 
+	IFEQ	NO_LUPA
+	INCLUDE	"Lupa.asm"
+	ENDC
+
 ErNoStc:
+	IFEQ	NO_LUPA
+	ST	LupaErr
+	ENDC
 	BSR	CloseFile
 	LEA	tErNoStc,A0
 	BRA	ImpError
 OpenError:
+	IFEQ	NO_LUPA
+	ST	LupaErr
+	ENDC
 	LEA	tErOpenFile,A0
 	BRA	ImpError
 ReadError:
+	IFEQ	NO_LUPA
+	ST	LupaErr
+	ENDC
 	BSR	CloseFile
 	LEA	tErReadFile,A0
 	BRA	ImpError
 NoNESCart:
+	IFEQ	NO_LUPA
+	ST	LupaErr
+	ENDC
 	BSR	CloseFile
 	LEA	tErNoNESCart,A0
 	BRA	ImpError
 OutOfMem:
+	IFEQ	NO_LUPA
+	ST	LupaErr
+	ENDC
 	CLR.L	BucCart
 	BSR	CloseFile
 	LEA	tErOutOfMem,A0
@@ -1205,7 +1294,11 @@ ImpJoyType:
 	MOVEQ	#1,D0
 	BSR	GetGadgetValue
 	MOVE.L	#534,D2
+	IFNE	NO_CD32KIT
 .one:	AND.W	#$0003,D0
+	ELSE
+.one:	AND.W	#$0007,D0
+	ENDC
 	MOVE.L	(TabGfxPort.w,PC,D0.w*4),DirJoyTypePic
 	MOVE.L	D2,D0
 	MOVE.L	#143,D1
@@ -1223,6 +1316,9 @@ TabGfxPort:				; the menu's order: none (the keyboard), joystick, CD32 pad, joyp
 	DC.L	GBJoyStick
 	DC.L	GBCD32
 	DC.L	GBJoypad
+	IFEQ	NO_CD32KIT
+	DC.L	GBCD32,GBCD32,GBCD32,GBCD32	; KTRL CD32+ (5-7 never come)
+	ENDC
 	ENDC
 
 ; ------------------------------------------
@@ -1372,14 +1468,28 @@ PonPrefs:
 	ENDC
 	MOVEQ	#0,D0
 	MOVE.B	$08(A5),D0		; port 2
+	IFNE	NO_CD32KIT
 	AND.W	#3,D0
+	ELSE
+	CMP.W	#PadTypes-1,D0
+	BLS.S	.k2
+	MOVEQ	#0,D0
+.k2:
+	ENDC
 	BSR	PortSwap
 	MOVE.L	D0,D2
 	MOVE.W	#GD_JoyType,D0
 	BSR	PonCycle
 	MOVEQ	#0,D2
 	MOVE.B	$16(A5),D2		; port 1
+	IFNE	NO_CD32KIT
 	AND.W	#3,D2
+	ELSE
+	CMP.W	#PadTypes-1,D2
+	BLS.S	.k1
+	MOVEQ	#0,D2
+.k1:
+	ENDC
 	MOVE.W	#GD_JoyPort,D0
 	BSR	PonCycle
 	MOVEQ	#0,D2
@@ -1407,6 +1517,9 @@ PonPrefs:
 	MOVEQ	#0,D2
 	TST.B	RtgAvail
 	SEQ	D2			; ghosted without P96
+	IFEQ	OcsRtgOff
+	OR.B	SinAGA,D2		; and without AGA (RTG is the only picture)
+	ENDC
 	IFNE	AGC
 	IFEQ	NO_RTGMODE
 	BSR	DispModeTags		; the colour program: RTG shows its mode (Pick mode..., Automatic), AGA ghosted
@@ -2002,6 +2115,12 @@ BramMax=26
 BramMkName:
 	CLR.B	BramName
 	LEA	FileNom(PC),A0
+	IFEQ	NO_CD
+	TST.B	CdOn			; CD games share one BRAM, as on the machine
+	BEQ.S	.hu
+	LEA	CdBramNom,A0
+.hu:
+	ENDC
 	MOVE.L	A0,A1			; A1 base name
 	SUB.L	A2,A2			; A2 its last dot
 .scan:	MOVE.B	(A0)+,D0
@@ -2270,6 +2389,36 @@ BucAGA2:
 	BNE	NoAGA2
 	MOVEQ	#-1,D0
 	RTS
+	IFEQ	OcsRtgOff
+; AgaCheck: as MiraAGA, but no window without AGA when RTG is on (the RTG picture needs no AGA).
+; Jumps into MiraAGA, so the stack is as for BSR MiraAGA (MC68020SALIR unwinds it).
+AgaCheck:
+	TST.B	SinAGA
+	BEQ	MiraAGA
+	TST.B	RtgWant
+	BEQ	MiraAGA
+	MOVEQ	#-1,D0
+	RTS
+; ChipAga: SinAGA = $FF without an AGA chipset (Lisa ID as MiraAGA reads it), 0 with one.
+ChipAga:
+	MOVEM.L	D1-D3/A0,-(SP)
+	LEA	$DFF000,A0
+	MOVE.W	$7C(A0),D1
+	MOVE.W	#30-1,D3
+.l:	MOVE.W	$7C(A0),D2
+	CMP.B	D2,D1
+	BNE.S	.no
+	DBF	D3,.l
+	ORI.B	#$F0,D1
+	CMPI.B	#$F8,D1
+	BNE.S	.no
+	SF	SinAGA
+	BRA.S	.x
+.no:	ST	SinAGA
+.x:	MOVEM.L	(SP)+,D1-D3/A0
+	RTS
+SinAGA:	DC.B	0
+	ENDC
 
 ; ------------------------------------------
 ; ******************************************
@@ -2791,6 +2940,16 @@ MIRACEROB:
 ;	 -4(A1)= Nº de Gadgets-1
 	CNOP	0,8
 Control:
+	IFEQ	NO_LUPA
+	CMP.L	#MainMenuPunts,A1
+	BNE.S	.noLupa
+	MOVEM.L	D0-D7/A0-A6,-(SP)
+	JSR	LupaAuto		; a game named at start: Insert, Power ON (once)
+	MOVEM.L	(SP)+,D0-D7/A0-A6
+	TST.B	LupaQuit
+	BNE	ControlRET		; ONEGAME: the menu closes, the program quits
+.noLupa:
+	ENDC
 	IFNE	MenuAuto
 	CMP.L	#MainMenuPunts,A1
 	BNE.S	.noAuto

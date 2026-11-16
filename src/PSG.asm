@@ -722,6 +722,23 @@ PSGDdaInit:
 	MOVE.W	#610,PSGTkPer		; PAL screen: 313 x 227.5 / 116.9 ticks = 609.3
 	ENDC
 	ENDC
+	IFEQ	NO_NTSCRATE
+	TST.B	BeamExact
+	BEQ.S	.std
+	MOVE.W	#225,PSGDdaPer		; BeamSet's 262 x 226 = 59212 frame: 264 x 225 = 59400, 262 x 225 = 58950
+	IFEQ	DdaTickOff
+	MOVE.L	D0,-(SP)
+	MOVEQ	#0,D0
+	MOVE.W	BeamLines,D0		; lines x colour clocks / 116.9, rounded up (262 x 226: 507)
+	MULU.W	#BeamCC*10,D0
+	ADD.L	#1168,D0
+	DIVU.W	#1169,D0
+	MOVE.W	D0,PSGTkPer
+	MOVE.L	(SP)+,D0
+	ENDC
+	RTS
+.std:
+	ENDC
 	MOVE.W	#270,PSGDdaPer		; PAL screen: 264 x 270 = 71280, 262 x 270 = 70740 (frame 71051)
 	TST.B	DirPrefs+$0F
 	BEQ.S	.pal
@@ -1089,6 +1106,12 @@ PSGServe:
 
 ; Once per PCE frame (main loop, after PCE_Start; keeps all registers).
 PSGDdaFrame:
+	IFEQ	MixOff
+	TST.B	PSGMixOn
+	BEQ.S	.noMix
+	JMP	PSGMixFrame		; RTG, SOUNDMIX: all channels mixed instead
+.noMix:
+	ENDC
 	MOVEM.L	D0-D6/A0-A1,-(SP)
 	IFEQ	NO_DDASTRETCH
 	MOVE.L	vTimerVBlanks,D0	; Amiga frames since the last PCE frame (1 at full rate)

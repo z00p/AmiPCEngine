@@ -28,6 +28,9 @@ PCE_Init:
 ;	A0.L : Cardtridge Address
 PCE_SetCardtridge:
 	BSR	IO_SetCardtridge
+	IFEQ	NO_CD
+	JSR	CdPowerOn		; a disc in: CD RAM banks, the unit reset
+	ENDC
 
 	MOVEM.L	InitReg(PC),D0-D7/A0-A6
 
@@ -329,6 +332,9 @@ noVblankInt:
 	IFEQ	NO_TIMER
 	BSR	TimerLine
 	ENDC
+	IFEQ	NO_CD
+	JSR	CdLine
+	ENDC
 
 
 	MOVEM.W	(SP)+,D0/D1
@@ -624,6 +630,9 @@ SatShown:	DS.B	(64*8)		; SpriteCoor as the frame began (PCE_Start): what its pic
 
 
 	INCLUDE	"IO.asm"
+	IFEQ	NO_CD
+	INCLUDE	"CD.asm"
+	ENDC
 
 
 	CNOP	0,8

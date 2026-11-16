@@ -4,6 +4,41 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.2
+
+- CD-ROM games (beta). CD-ROM and Super CD-ROM games load from a CUE
+  sheet with BIN or ISO files: pick the .cue with Insert, or give it
+  on the command line or to a launcher. They run on System Card 3.0
+  (syscard3.pce or cd_bios.rom next to the .cue or in the
+  AmiPCEngine drawer; a US card dump is turned round on loading).
+  The disc is read into RAM before the game starts, each file once
+  from start to end: Gradius II (a 520 MB BIN) takes about 40
+  seconds over a network share on an A1200 with a PiStorm. BIN files
+  that keep 2048-byte data and 2352-byte audio sectors in one file
+  (chdman) work. The menu shows the .cue's name while the disc loads.
+- CD music and ADPCM speech play: a CD game sends all its sound,
+  the PSG too, through a software mix, on AGA and RTG. The ToolType
+  or Shell word CDMUSIC=<percent> sets the music level against the
+  rest (0 to 400, default 200). ADPCM speech was checked against
+  Mesen: Gate of Thunder's three speech clips match it sample for
+  sample. All CD games share one save file, as the CD unit's backup
+  RAM does on the console. Arcade Card games are not supported.
+- Speed: on a PAL Amiga, games now run at the PC Engine's own rate.
+  The NTSC screen there was the chipset's NTSC frame on the PAL
+  crystal, 59.28 frames a second against the PC Engine's 59.83, so
+  every game, its music and its speech ran 0.9% slow (since 1.0). It
+  now runs a programmed frame of 262 lines, 59.90 frames a second.
+  An NTSC Amiga was already right and is unchanged.
+- Launchers: a game on the command line or in a project icon, with
+  AGA, RTG, ONEGAME (leaving the game quits the program), MENU and
+  PROFILE=, and return codes for scripts and launchers such as
+  Lupa.
+- Pads: a KTRL CD32+ pad type, for CD32 pads and adapters that want
+  the pad clocked the other way round (the KTRL CD32+, the Mega
+  Multi adapter in CD32 mode).
+- Without AGA (an A500 or A2000 with a PiStorm, for example) the
+  program runs on RTG instead of stopping with "AGA required".
+
 ## New in 2.1
 
 - RTG: a choice of screen mode for play. The menu's Display gadget

@@ -805,7 +805,11 @@ ScanLabels:
 DispLabels:
 	DC.L	DispLab0,DispLab1,0
 PortLabels:
-	DC.L	PortLab0,PortLab1,PortLab2,PortLab3,0
+	DC.L	PortLab0,PortLab1,PortLab2,PortLab3
+	IFEQ	NO_CD32KIT
+	DC.L	PortLab4
+	ENDC
+	DC.L	0
 ScanLab0:	DC.B	'Off',0
 ScanLab1:	DC.B	'Hard 25%',0
 ScanLab2:	DC.B	'Hard 50%',0
@@ -819,6 +823,9 @@ PortLab0:	DC.B	'None',0
 PortLab1:	DC.B	'Joystick',0
 PortLab2:	DC.B	'CD32 Joypad',0
 PortLab3:	DC.B	'Std Joypad',0
+	IFEQ	NO_CD32KIT
+PortLab4:	DC.B	'KTRL CD32+',0
+	ENDC
 	CNOP	0,2
 	ENDC
 
@@ -865,7 +872,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL14
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
+	IFEQ	NO_REL22
+    DC.B    'AmiPC-Engine Emulator v2.2  (Debug rows)',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.1  (Debug rows)',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.0  (Debug rows)',0
 	ENDC
@@ -887,7 +898,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL14
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
+	IFEQ	NO_REL22
+    DC.B    'AmiPC-Engine Emulator v2.2',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.1',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.0',0
 	ENDC
@@ -1694,7 +1709,11 @@ MC68020Text0:
     DC.B    4,0
     DC.B    $00
     DC.B    0
+    IFEQ    OcsRtgOff
+    DC.W    29,10
+    ELSE
     DC.W    33,10
+    ENDC
     DC.L    topaz8
     DC.L    MC68020IText0
     DC.L    0
@@ -1960,7 +1979,11 @@ AboutIText0:
 	IFEQ	NO_REL14
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
+	IFEQ	NO_REL22
+    DC.B    'AmiPC-Engine Emulator v2.2',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.1',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.0',0
 	ENDC
@@ -1983,7 +2006,11 @@ AboutIText1:
 	IFEQ	NO_REL14
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
+	IFEQ	NO_REL22
+    DC.B    '(17 November 2026)',0
+	ELSE
     DC.B    '(14 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(12 November 2026)',0
 	ENDC
@@ -2006,7 +2033,11 @@ AboutITextZ:
 	IFEQ	NO_REL14
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
+	IFEQ	NO_REL22
+    DC.B    'Version 2.2: z00p',0
+	ELSE
     DC.B    'Version 2.1: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 2.0: z00p',0
 	ENDC
@@ -2070,7 +2101,11 @@ AboutIText10:
     CNOP    0,2
 
 MC68020IText0:
+    IFEQ    OcsRtgOff
+    DC.B    'Needs 68020+ and AGA or RTG!',0
+    ELSE
     DC.B    'MC68020+ and AGA required!',0
+    ENDC
 
     CNOP    0,2
 

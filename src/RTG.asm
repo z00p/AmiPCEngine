@@ -92,6 +92,11 @@ RtgStart:
 	IFNE	RTGFORCE
 	ST	RtgWant
 	ENDC
+	IFEQ	MixOff
+	IFNE	MIXFORCE
+	ST	SndMixWant
+	ENDC
+	ENDC
 	MOVE.L	A2,D0
 	BEQ.S	.cli
 	BSR	RtgToolType
@@ -105,7 +110,22 @@ RtgStart:
 	ST	RtgWant
 	ENDC
 .wp:				; P96 is looked for even when RTG is not wanted now: the menu may pick it
+	IFEQ	NO_LUPA
+	JSR	LupaDispApply		; AGA / RTG on the command line or the project icon
+	ENDC
+	IFEQ	OcsRtgOff
+	TST.B	SinAGA
+	BEQ.S	.aga
+	ST	RtgWant			; no AGA chipset: RTG is the only picture
+	IFEQ	NO_LUPA
+	JSR	LupaNoAga		; AGA asked for: return code 5
+	ENDC
+.aga:
+	ENDC
 	ELSE
+	IFEQ	NO_LUPA
+	JSR	LupaDispApply
+	ENDC
 	TST.B	RtgWant
 	BEQ	.x
 	ENDC
@@ -268,7 +288,11 @@ RtgToolType:
 	MOVE.L	RtgDos,A6
 	JSR	-126(A6)		; CurrentDir back
 	TST.L	D4
+	IFEQ	CdSndOff
+	BEQ	.cl
+	ELSE
 	BEQ.S	.cl
+	ENDC
 	MOVE.L	D4,A0
 	MOVE.L	$36(A0),A0		; do_ToolTypes
 	LEA	RtgTTNom(PC),A1
@@ -301,6 +325,29 @@ RtgToolType:
 	BSR	RtgModeVal
 .fm:
 	ENDC
+	IFEQ	MixOff
+	MOVE.L	D4,A0			; SOUNDMIX
+	MOVE.L	$36(A0),A0
+	LEA	RtgMixNom(PC),A1
+	MOVE.L	D5,A6
+	JSR	-96(A6)			; FindToolType
+	TST.L	D0
+	BEQ.S	.fr1
+	ST	SndMixWant
+.fr1:
+	ENDC
+	IFEQ	CdSndOff
+	MOVE.L	D4,A0			; CDMUSIC=percent
+	MOVE.L	$36(A0),A0
+	LEA	CdMusTTNom,A1
+	MOVE.L	D5,A6
+	JSR	-96(A6)			; FindToolType
+	TST.L	D0
+	BEQ.S	.fc
+	MOVE.L	D0,A0
+	JSR	CdMusVal
+.fc:
+	ENDC
 	MOVE.L	D4,A0
 	MOVE.L	D5,A6
 	JSR	-90(A6)			; FreeDiskObject
@@ -321,6 +368,16 @@ RtgCliArg:
 	ENDC
 	IFEQ	NO_RTGMODE
 	BSR	RtgModeCli		; RTGMODE=... (A0 kept)
+	ENDC
+	IFEQ	MixOff
+	BSR	RtgMixCli		; SOUNDMIX (A0 kept)
+	ENDC
+	IFEQ	CdSndOff
+	JSR	CdMusCli		; CDMUSIC=... (A0 kept)
+	ENDC
+	IFEQ	NO_LUPA
+	TST.B	LupaParsed		; the menu program: the RTG word is Lupa.asm's (not inside a file name)
+	BNE	.x
 	ENDC
 	MOVEQ	#0,D2			; 1: the previous character was a letter
 .l:	MOVE.B	(A0)+,D0
@@ -1387,6 +1444,9 @@ RtgTakeover:
 .r:
 	ENDC
 	MOVE.W	#$01A0,$DFF096		; BPLEN, COPEN, SPREN off
+	IFEQ	MixOff
+	MOVE.B	SndMixWant,PSGMixOn	; the mix, on the RTG display only
+	ENDC
 	MOVE.W	#$0000,$DFF180
 	IFEQ	RtgBlankOff
 	MOVE.W	#$0200,$DFF100		; BPLCON0: no bitplanes. On Esc the OS copper list comes back without
@@ -2875,6 +2935,33 @@ RtgScanVal:
 	MOVE.B	D1,DirPrefs+$15
 .x:	MOVEM.L	(SP)+,D0-D1
 	RTS
+
+	IFEQ	MixOff
+; RtgMixCli: A0 = the CLI arguments; SOUNDMIX anywhere (any case).
+RtgMixCli:
+	MOVEM.L	D0-D1/A0-A2,-(SP)
+.s:	TST.B	(A0)
+	BEQ.S	.x
+	MOVE.L	A0,A1
+	LEA	RtgMixNom(PC),A2
+.c:	MOVE.B	(A2)+,D1
+	BEQ.S	.hit
+	MOVE.B	(A1)+,D0
+	CMP.B	#97,D0
+	BCS.S	.c1
+	CMP.B	#122,D0
+	BHI.S	.c1
+	SUB.B	#32,D0
+.c1:	CMP.B	D1,D0
+	BEQ.S	.c
+	ADDQ.L	#1,A0
+	BRA.S	.s
+.hit:	ST	SndMixWant
+.x:	MOVEM.L	(SP)+,D0-D1/A0-A2
+	RTS
+RtgMixNom:	DC.B	"SOUNDMIX",0
+	EVEN
+	ENDC
 
 ; RtgScanCli: A0 = the CLI arguments; SCANLINES=value anywhere (any case).
 RtgScanCli:

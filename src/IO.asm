@@ -619,6 +619,12 @@ readIO_1400_17FF:
 ; -------------------------------------------------------------------
 
 readIO_1800_1FFF:
+	IFEQ	NO_CD
+	TST.B	CdOn
+	BEQ.S	.noCd
+	JMP	CdReadIO
+.noCd:
+	ENDC
 	RTS
 
 ; -------------------------------------------------------------------
@@ -683,6 +689,10 @@ WriteIO:
 	BCS	writeIrqPort
 	ENDC
 .notTimerIrq:
+	ENDC
+	IFEQ	NO_CD
+	CMP.W	#$1800,D0		; the CD unit
+	BCC	writeIO_1800_1FFF
 	ENDC
 	IFEQ	NO_PSGWAVE
 	CMP.W	#$0C00,D0		; D0 >= $0800 here
@@ -1046,6 +1056,12 @@ writeIO_1400_17FF:
 ; -------------------------------------------------------------------
 
 writeIO_1800_1FFF:
+	IFEQ	NO_CD
+	TST.B	CdOn
+	BEQ.S	.noCd
+	JMP	CdWriteIO
+.noCd:
+	ENDC
 	RTS
 
 ; -------------------------------------------------------------------
