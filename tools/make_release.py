@@ -176,6 +176,22 @@ def draw_drawer():
     return im
 
 
+def draw_page():
+    """A sheet of paper with a folded corner, grey text lines, a dark outline and a
+    drop shadow, for ReadMe.txt and CHANGES.txt (the same size as the drawers)."""
+    from PIL import Image, ImageDraw
+    im = Image.new("RGB", (W, H), (255, 0, 255))
+    d = ImageDraw.Draw(im)
+    out, paper, fold, line, shade = (24, 32, 56), (250, 250, 250), (200, 206, 218), (150, 150, 160), (60, 60, 70)
+    l, t, r, b, c = 11, 5, 34, 40, 7                 # sheet edges, folded corner size
+    d.polygon([(l, t), (r - c, t), (r, t + c), (r, b), (l, b)], fill=paper, outline=out)
+    d.polygon([(r - c, t), (r - c, t + c), (r, t + c)], fill=fold, outline=out)
+    for y in range(t + 10, b - 3, 4):
+        d.line([l + 4, y, r - 4 - (7 if y % 12 == 3 else 0), y], fill=line)
+    d.line([r + 1, t + c + 1, r + 1, b + 1], fill=shade); d.line([l + 1, b + 1, r + 1, b + 1], fill=shade)
+    return im
+
+
 def planar(im):
     """2-bitplane Image for the classic icon (nearest Workbench pen)."""
     rows = (W + 15) // 16 * 2
@@ -210,6 +226,32 @@ def glow(im):
     imag = struct.pack(">BBBBBBHH", 0, ncol - 1, 3, 0, 0, 8, len(pixels) - 1, len(palette) - 1)
     form = b"ICON" + chunk(b"FACE", face) + chunk(b"IMAG", imag + bytes(pixels) + palette)
     return b"FORM" + struct.pack(">I", len(form)) + form
+
+
+def project_icon(im, default_tool, x, y):
+    gadget = struct.pack(">IhhhhHHHIIIIIHI", 0, 0, 0, W, H + 1, 4, 3, 1, 1, 0, 0, 0, 0, 0, 1)
+    head = struct.pack(">HH", 0xE310, 1) + gadget + struct.pack(
+        ">BBIIiiIII", 4, 0, 1, 0, x, y, 0, 0, 4096)   # WBPROJECT, a default tool, no tooltypes
+    assert len(head) == 78, len(head)
+    return head + planar(im) + lstr(default_tool) + glow(im)
+
+
+def at(icon, x, y):
+    """The icon snapshotted at (x, y) in its drawer window."""
+    icon = bytearray(icon)
+    struct.pack_into(">ii", icon, 58, x, y)
+    return bytes(icon)
+
+
+# The main drawer's snapshotted layout (window-relative, icon top left): two columns, the
+# programs, then the drawers, then the text files; the window opens just big enough.
+COL = (60, 190)                                       # column centres
+ROW = (6, 100, 172)                                   # tops: programs (70 high), drawers, texts
+WIN = (300, 290)
+
+
+def col(c, w):
+    return COL[c] - w // 2
 
 
 def drawer_icon(im, w=420, h=200):
@@ -295,7 +337,8 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False, colour=None, 
         open(os.path.join(d, name), "wb").write(data)
 
     shutil.copy(binary, os.path.join(d, FAST))
-    put(FAST + ".info", tpl)                                           # AGA: the template as it is
+    tw = struct.unpack(">h", tpl[82:84])[0]                            # the program icons' width
+    put(FAST + ".info", at(tpl, col(0, tw), ROW[0]))                   # AGA: the template, snapshotted
     variants = [(RTG, FAST, binary)]
     if debug:
         shutil.copy(debug, os.path.join(d, FAST_DBG))
@@ -306,7 +349,8 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False, colour=None, 
             shutil.copy(prog, os.path.join(d, name))
             put(name + ".info", tool_icon_with(tpl, ["RTG"]))
         else:                                                          # a project icon for the program
-            put(name + ".info", tool_icon_with(tpl, ["RTG"], default_tool=tool))
+            icon = tool_icon_with(tpl, ["RTG"], default_tool=tool)
+            put(name + ".info", at(icon, col(1, tw), ROW[0]) if name == RTG else icon)
     for name, prog in ((COLOUR, colour), (COLOUR_DBG, colour_debug)):
         if prog:                                                       # the AGA colour program
             shutil.copy(prog, os.path.join(d, name))
@@ -320,11 +364,14 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False, colour=None, 
     open(os.path.join(d, "Homebrew", "PadTest.pce"), "wb").write(padtest_rom())   # the pad test (ReadMe)
     im = draw_drawer()
     di = drawer_icon(im)
-    put("Homebrew.info", di)                                           # the ROM drawer's icon
+    put("Homebrew.info", at(di, col(1, W), ROW[1]))                    # the ROM drawer's icon
     os.makedirs(os.path.join(d, "Saves"))                              # backup RAM (the program makes it too)
     open(os.path.join(d, "Saves", "Saves go here.txt"), "wb").write(SAVES_NOTE.encode("ascii"))
-    put("Saves.info", di)
-    open(os.path.join(out, "AmiPCEngine.info"), "wb").write(di)        # the drawer's own icon
+    put("Saves.info", at(di, col(0, W), ROW[1]))
+    page = draw_page()
+    put("ReadMe.txt.info", project_icon(page, "SYS:Utilities/MultiView", col(0, W), ROW[2]))
+    put("CHANGES.txt.info", project_icon(page, "SYS:Utilities/MultiView", col(1, W), ROW[2]))
+    open(os.path.join(out, "AmiPCEngine.info"), "wb").write(drawer_icon(im, *WIN))   # the drawer's own icon
     check_no_roms(out)
     n = 0
     for root, _, files in os.walk(out):

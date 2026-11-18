@@ -33,6 +33,9 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
   uses the chipset's own NTSC frame again, as 2.1 did (0.9% slow).
   For displays and emulators that show a black screen with 2.2's
   programmed frame; WinUAE showed black until its NTSC box was ticked.
+- The AmiPCEngine drawer opens with its icons laid out: AGA and RTG,
+  then Saves and Homebrew, then ReadMe.txt and CHANGES.txt, which now
+  have icons of their own (they open in MultiView).
 - Pad test: PadTest.pce in the Homebrew drawer, a small HuCard of our
   own. One line for each PC Engine button, with the CD32 pad and
   joystick buttons that drive it and a box that turns green while the

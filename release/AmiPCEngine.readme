@@ -38,7 +38,8 @@ the mix. CD games: one save file per disc, louder ADPCM speech. CD32
 pads: a longer latch wait for pads that latch slowly. PadTest.pce, a
 pad test HuCard, in the Homebrew drawer. The Screen setting works on
 AGA again (PAL: 5/6 speed). PLAINNTSC for displays that show black
-with the PC Engine-rate frame. See CHANGES.txt.
+with the PC Engine-rate frame. The drawer opens with its icons laid
+out; ReadMe.txt and CHANGES.txt have icons. See CHANGES.txt.
 
 New in 2.2
 ----------
