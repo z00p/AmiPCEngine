@@ -27,6 +27,19 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
+New in 2.3
+----------
+A Sound menu: Original stereo (the six channels on Paula's four
+voices, now losing far fewer notes) or Full channel mix (all six in a
+software mix, centred, with an automatic level), and a Tone menu:
+Bright, Soft (the default, a 4.5 kHz treble cut on the mix) or Warm
+(the Amiga's own audio filter). Kept by Save Prefs; SOUNDMIX starts on
+the mix. CD games: one save file per disc, louder ADPCM speech. CD32
+pads: a longer latch wait for pads that latch slowly. PadTest.pce, a
+pad test HuCard, in the Homebrew drawer. The Screen setting works on
+AGA again (PAL: 5/6 speed). PLAINNTSC for displays that show black
+with the PC Engine-rate frame. See CHANGES.txt.
+
 New in 2.2
 ----------
 CD-ROM and Super CD-ROM games (beta), on System Card 3.0, with CD
@@ -114,7 +127,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 2.2 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
+1.0 to 2.3 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
 Afrotechmods / FAmiga. Thanks to Zener
 and Sandman, and to reassembler for his guidance and direction.
 

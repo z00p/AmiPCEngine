@@ -61,7 +61,7 @@ Double-click one of the icons in the AmiPCEngine drawer:
                    RAM with every sprite palette and the full width,
                    and copied into an 8-plane AGA screen, scrolling by
                    hardware where the game scrolls. The screen is
-                   always NTSC (60 Hz).
+                   NTSC (60 Hz) unless Screen says PAL.
   RTG              the same program with the ToolType RTG: the picture
                    goes to a Picasso96 screen (for example a PiStorm's
                    HDMI output). The menu opens there too, at double
@@ -105,11 +105,20 @@ ToolTypes (in the icon's Information window):
              CD games: the CD music's level in the sound mix, as a
              percentage of the disc's own level, 0 to 400. The
              default is 200. Loud tracks may clip at 200 or more.
+  SOUNDMIX   start with the Sound menu on Full channel mix (see
+             section 4), over the saved prefs.
+  PLAINNTSC  on a PAL Amiga, the NTSC screen is the chipset's own
+             NTSC frame, as in 2.1: games run 0.9% slow. Without it
+             (the default) the program sets up a 262-line frame at
+             the PC Engine's rate. Use it only for a display or an
+             emulator that shows a black screen otherwise (WinUAE
+             did, until its NTSC box was ticked).
 
 From a Shell: AGA RTG   (the word RTG, as the ToolType)
               AGA RTG SCANLINES=50
               AGA RTG RTGMODE=800x600
               AGA CDMUSIC=150
+              AGA SOUNDMIX
 
 Starting a game straight away (from a Shell, a script or a game
 launcher such as Lupa):
@@ -140,10 +149,11 @@ fallback (RTG asked for but not available, or PROFILE=030), 10 the
 HuCard could not be loaded (with ONEGAME), 20 this Amiga can't run
 the program (no 68020, or neither AGA nor RTG).
 
-On RTG the screen starts in NTSC (60 Hz), the PC Engine's own rate,
-unless the menu's Screen gadget (or your saved prefs) says PAL. On PAL
-(50 Hz) the games run at 5/6 speed, and text a game redraws in
-mid-frame can look rough. The AGA screen is always NTSC.
+The screen starts in NTSC (60 Hz), the PC Engine's own rate, unless
+the menu's Screen gadget (or your saved prefs) says PAL. PAL (50 Hz)
+is there for TVs and monitors that won't take 60 Hz: the games run at
+5/6 speed, sound and music too, and on RTG text a game redraws in
+mid-frame can look rough. (Up to 2.2 the AGA screen was always NTSC.)
 
 On a PAL Amiga the NTSC screen runs a programmed frame of 262 lines
 at 59.90 Hz, close to the PC Engine's 59.83 Hz. (The chipset's own
@@ -167,8 +177,8 @@ Exit           back to Workbench.
 Help Page      a summary of the keys and pads.
 Backup RAM     the game's save file: "No save file yet", "Save file
                found", "Save file loaded" or "Game saved".
-Screen         NTSC (60Hz) or PAL (50Hz), RTG only, for the next
-               Power ON or Continue. The AGA screen is always NTSC.
+Screen         NTSC (60Hz, the default) or PAL (50Hz, 5/6 speed), for
+               the next Power ON or Continue (see section 3).
 Display        AGA, or on RTG the mode the game is shown in (such as
                RTG 960x540). Pick mode... opens a screen mode
                requester with the 16-bit Picasso96 modes; Automatic
@@ -183,9 +193,22 @@ Scanlines      RTG only (Off, Hard 25%, Hard 50%, Hard 75%, Blended
 Joy-Control    the pad on each port, see section 5.
 Project menu   About, Help Page, Save Prefs, Quit (right mouse button).
 Cartridges     Insert Cartridge, Eject Cartridge.
+Sound menu     how the PC Engine's six sound channels are played (see
+               Sound in section 7), from the next Power ON or
+               Continue.
+               Original stereo   the channels share Paula's four
+                                 voices (the default).
+               Full channel mix  all six through a software mix.
+Tone menu      Bright (unfiltered), Soft (4.5 kHz), Warm (A1200
+               filter): Soft, the default, cuts the treble of the
+               Full channel mix a little; Warm turns on the Amiga's
+               own audio filter (the one tied to the power light)
+               while a game plays, in either mode. On Original
+               Stereo, Soft sounds as Bright.
 
-Save Prefs keeps the Screen, Display (the RTG mode), Scanlines and
-Joy-Control settings and the drawer the requester was last in.
+Save Prefs keeps the Screen, Display (the RTG mode), Scanlines,
+Joy-Control, Sound and Tone settings and the drawer the requester was
+last in.
 
 On OS 3.5 and later (chooser.gadget) the Screen, Display, Scanlines
 and port settings open a list to pick from. Without chooser.gadget,
@@ -231,6 +254,13 @@ either can be used, or both at once.
                     Joypad)
 The first start has port 1 on None and port 2 on Joystick.
 
+Pad test: PadTest.pce in the Homebrew drawer is a small HuCard of our
+own. It lists each PC Engine button with the CD32 pad and joystick
+buttons that drive it, and a box that turns green while the game sees
+the button held. If a button flickers or does nothing in a game, run
+PadTest, try the other CD32 setting (CD32 Joypad or KTRL CD32+), and
+send a photo of the screen with the name of your pad or adapter.
+
 Juan's built-in debugger (keys P, T and S) is not in this program.
 
 
@@ -273,8 +303,10 @@ CD-ROM (beta)
   * CD music and ADPCM speech play. A CD game sends all its sound,
     the PSG too, through the software mix, on AGA and RTG. The music
     level is the CDMUSIC ToolType.
-  * All CD games share one save file, "CD-ROM System", as the CD
-    unit's backup RAM does on the console.
+  * Each CD game has its own save file in the Saves drawer, named
+    after its .cue. A disc without one starts from the shared
+    "CD-ROM System" file that 2.2 used for all CD games, so 2.2
+    saves carry over.
   * Gradius II, Star Parodier, Gate of Thunder and Rainbow Islands
     play with music and speech on a PiStorm A1200; Castlevania -
     Rondo of Blood, Valis II and Fighting Street in WinUAE.
@@ -288,13 +320,20 @@ Not supported (there is no code for them)
     pad.
 
 Sound
-  Six PSG channels play on the Amiga's four, the four loudest at each
-  frame, each with the game's own waveform at its pitch, volume and
+  Original stereo (the default): six PSG channels play on the Amiga's
+  four, each with the game's own waveform at its pitch, volume and
   balance. Noise (drums, explosions) and DDA samples (voices and drums
   in Soldier Blade and Parodius Da!) are played. Limits:
   * Amiga channels are hard left or right, so a centred PC Engine
     channel comes out of one side.
-  * With five or six channels playing, the quietest are dropped.
+  * With five or six channels playing, two wait for a voice: a new
+    note wins one from a note that has been held for a while, else
+    the quietest wait.
+  Full channel mix (Sound menu, or SOUNDMIX): all six channels mixed
+  in software at 22 kHz and played in 14 bits, centred channels in
+  the middle, as CD games always play. The level is set
+  automatically, with a soft limiter on the loudest peaks. It costs
+  some speed, so try Original stereo on a slow Amiga.
   * No LFO (channel 2 is silent while it is on); no tones above about
     14 kHz.
   * DDA samples are played a frame or two late. On a PAL screen they
@@ -330,8 +369,8 @@ Known faults
          RTG screen, and full speed on an A1200 with a PiStorm.
          Version 1.0 came out on 31 October, 1.1 on 2 November,
          1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November,
-         2.0 on 12 November, 2.1 on 14 November and 2.2 on 15
-         November.
+         2.0 on 12 November, 2.1 on 14 November, 2.2 on 16
+         November and 2.3 on 18 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -345,7 +384,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 2.2    z00p
+  Versions 1.0 to 2.3    z00p
   Web and menu graphics  Multivac
   CD32 pad reading       Afrotechmods / FAmiga
   With thanks to         Zener and Sandman, and reassembler for his
@@ -362,7 +401,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 2.2, by z00p, are community updates
+Entertainment). Versions 1.0 to 2.3, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

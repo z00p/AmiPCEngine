@@ -3,8 +3,8 @@
 ; per port by D1:
 ;   D1 bit clear - "CD32 Joypad": pin 6 idles HIGH, each clock pulse goes low, then high again.
 ;   D1 bit set   - "KTRL CD32+":  pin 6 idles LOW,  each clock pulse goes high, then low again.
-; The image clock (pin 6 written from a copy of CIA-A PRA, never EOR on the port), a 35-read
-; latch wait and 3-read clock waits (each a CIA access, ~1.4 us on any CPU).
+; The image clock (pin 6 written from a copy of CIA-A PRA, never EOR on the port), a 200-read
+; latch wait (~280 us; 35 was too short for a KTRL CD32 on a PiStorm A1200: buttons flickered) and 3-read clock waits (each a CIA access, ~1.4 us on any CPU).
 ;   in:  D0.b = the ports to read: bit 1 = port 2, bit 0 = port 1 (a port left out is never driven)
 ;        D1.b = those among them read with the low clock
 ;   out: D0.l = port 2's answer, D1.l = port 1's: nine bits, 1 = pressed: 0 blue, 1 red, 2 yellow,
@@ -87,6 +87,10 @@ cd32read:
 .done:	movem.l	(sp)+,d2-d6
 	rts
 
-cd32_latch:	dc.w	35		; CIA reads
+	IFEQ	NO_LATCH200
+cd32_latch:	dc.w	200		; CIA reads
+	ELSE
+cd32_latch:	dc.w	35		; CIA reads (2.2)
+	ENDC
 cd32_clock:	dc.w	3
 	CNOP	0,4

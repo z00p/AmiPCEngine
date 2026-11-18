@@ -4,6 +4,48 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.3
+
+- Sound: a Sound menu in the launcher, kept by Save Prefs, with two
+  ways to play the PC Engine's six sound channels:
+  - Original stereo (the default): the channels share Paula's four
+    voices, as before, but a new note now wins a voice from one that
+    has been held for a while. In Blazing Lazers' first stage the
+    harmony line loses 7% of its notes instead of 57%.
+  - Full channel mix: all six channels through a software mix, on AGA
+    and RTG, as CD games already play. Each note's wave is averaged
+    over the length of a sample, so high notes no longer alias; the
+    level is set automatically, with a soft limiter on the loudest
+    peaks and no DC offset. The ToolType or Shell word SOUNDMIX starts
+    with it ticked.
+- A Tone menu, kept by Save Prefs too: Bright (unfiltered), Soft (a
+  treble cut at 4.5 kHz on the Full channel mix, the default) and
+  Warm (the Amiga's own audio filter, the one tied to the power
+  light, for either way of playing). Soft on Original stereo sounds
+  as Bright.
+- CD games: ADPCM speech is louder, at the balance Mesen gives it
+  against the music.
+- AGA: the Screen setting works again, so a game can be played on a
+  PAL screen (50 Hz, 5/6 speed) on a TV or monitor that won't take
+  60 Hz. NTSC stays the default. Since 2.0 the AGA screen was always
+  NTSC.
+- PLAINNTSC (ToolType or Shell word): on a PAL Amiga, the NTSC screen
+  uses the chipset's own NTSC frame again, as 2.1 did (0.9% slow).
+  For displays and emulators that show a black screen with 2.2's
+  programmed frame; WinUAE showed black until its NTSC box was ticked.
+- Pad test: PadTest.pce in the Homebrew drawer, a small HuCard of our
+  own. One line for each PC Engine button, with the CD32 pad and
+  joystick buttons that drive it and a box that turns green while the
+  game sees the button held. It reads the pad port as a game does, so
+  it tests the whole path from the Amiga port to the PC Engine pad.
+- CD32 pads: the read waits longer for the pad to latch its buttons,
+  about 0.3 ms instead of 0.05 ms. With the shorter wait a KTRL CD32
+  pad's green, yellow and Play buttons could flicker.
+- CD games: each disc has its own save file in the Saves drawer,
+  named after its .cue (2.2 kept one shared file for all CD games).
+  A disc without a file of its own starts from 2.2's shared
+  "CD-ROM System" file, so saves made with 2.2 carry over.
+
 ## New in 2.2
 
 - CD-ROM games (beta). CD-ROM and Super CD-ROM games load from a CUE

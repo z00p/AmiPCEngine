@@ -1,13 +1,15 @@
 ; PSGMix.asm: the six PSG channels mixed in software, once a frame in the main
-; loop, for the RTG display (ToolType / CLI word SOUNDMIX). Output through
-; SndOut.asm. The model is tools/mixrender.py: nearest sample from wave RAM by a
+; loop: CD games always, HuCards with the ToolType / CLI word SOUNDMIX (AGA and
+; RTG). Output through SndOut.asm. The model is tools/mixrender.py: wave RAM by a
 ; phase accumulator, registers once a frame, DDA samples at their place in the
-; frame, 1.5 dB volume steps per side, gain 0.32 of full scale for each channel,
-; the sum clipped. No LFO and no per-line registers yet (ahi.md, steps 4 on).
+; frame, 1.5 dB volume steps per side. MIXV2 bit 0: notes from about 695 Hz up
+; read a wave table averaged over the span of one output sample (no aliasing).
+; MIXV2 bit 1, HuCards: a DC filter, an automatic gain and a soft knee instead
+; of the fixed 0.32 a channel and clipping. No LFO and no per-line registers yet.
 ;
 ; The registers used for a frame's block are those at the end of that PCE frame.
-; AGA and RTG without SOUNDMIX never come here: PSGDdaFrame tests PSGMixOn, the
-; RTG vblank leaves out TocaPSG, and the DDA voices and PSGAudInt stay idle.
+; Without SOUNDMIX a HuCard never comes here: PSGDdaFrame tests PSGMixOn, the
+; vblank leaves out TocaPSG, and the DDA voices and PSGAudInt stay idle.
 ; DDA capture (PSGWrite) runs as always; this file reads what it stored. The
 ; ring lies over PSGDdaRing, which nothing uses in this mode: no chip RAM added.
 ;
@@ -57,6 +59,15 @@ PSGMixFrame:
 	CMP.W	#6,D6
 	BNE.S	.ch
 .chx:
+	IFNE	MIXV2&2
+	IFEQ	CdSndOff
+	TST.B	CdOn
+	BNE.S	.fix			; CD games: the fixed level, as CD audio and ADPCM are set against it
+	ENDC
+	BSR	MixAgcOut
+	BRA.S	.put
+.fix:
+	ENDC
 	LEA	MixBuf,A0		; L * 65536 + R at half scale -> L, R, clipped
 	MOVE.W	MixN,D7
 	SUBQ.W	#1,D7
@@ -82,6 +93,12 @@ PSGMixFrame:
 	EOR.W	#$8000,D1
 	BRA.S	.rok
 .put:
+	IFEQ	ToneOff
+	TST.B	DirPrefs+$1D		; Sound tone Soft (0, the default): the PSG through a 4.5 kHz low-pass
+	BNE.S	.nt
+	BSR	MixTone
+.nt:
+	ENDC
 	IFEQ	CdSndOff
 	TST.B	CdOn
 	BEQ.S	.ncd
@@ -173,6 +190,17 @@ MixChan:
 	DIVU.L	D1,D0
 	LSL.L	#5,D0
 	MOVE.L	D0,(MixInc.L,D6.W*4)
+	IFNE	MIXV2&1
+	MOVEQ	#19,D3
+	LSR.L	D3,D0			; wave steps a sample, 8.8
+	CMP.W	#256,D0
+	BCC.S	.sp
+	MOVEQ	#0,D0			; under one step a sample: nearest step
+.sp:	CMP.W	(MixSpan.L,D6.W*2),D0
+	BEQ.S	.inc
+	MOVE.W	D0,(MixSpan.L,D6.W*2)
+	ST	(MixStale.L,D6.W)
+	ENDC
 .inc:	LEA	MixWaveT,A3
 	MOVE.W	D6,D0
 	LSL.W	#7,D0
@@ -187,6 +215,13 @@ MixChan:
 	MOVE.W	D6,D0
 	LSL.W	#5,D0
 	ADD.W	D0,A0
+	IFNE	MIXV2&1
+	TST.W	(MixSpan.L,D6.W*2)
+	BEQ.S	.near
+	BSR	MixMakeBox
+	BRA.S	.play
+.near:
+	ENDC
 	MOVE.L	A3,A1
 	MOVEQ	#32-1,D1
 .w:	MOVEQ	#0,D0
@@ -262,6 +297,265 @@ MixMakeLevels:
 	DBF	D3,.l
 	MOVEM.L	(SP)+,D1-D5/A0
 	RTS
+
+	IFNE	MIXV2
+; Test builds. D6 = channel, A0 = its 32 wave steps, A3 = the table to make. Each
+; step is the wave averaged over the span one output sample covers, from that step
+; on: MixSpan(D6) steps in 8.8, k whole steps and a fraction of the next. Prefix
+; sums give the k steps, a reciprocal the division. (2 * avg - 31) * gain / 256 a
+; side, as MixMakeLevels. A box filter: high notes no longer alias. Keeps all.
+MixMakeBox:
+	MOVEM.L	D0-D7/A1-A3,-(SP)
+	LEA	MixPre,A1
+	MOVEQ	#0,D0
+	MOVE.W	D0,(A1)+
+	MOVEQ	#0,D1
+	MOVEQ	#64-1,D7
+.p:	MOVEQ	#31,D2
+	AND.W	D1,D2
+	MOVEQ	#0,D3
+	MOVE.B	(A0,D2.W),D3
+	ADD.W	D3,D0
+	MOVE.W	D0,(A1)+
+	ADDQ.W	#1,D1
+	DBF	D7,.p
+	MOVEQ	#0,D5
+	MOVE.W	(MixSpan.L,D6.W*2),D5
+	MOVE.L	#$1000000,D4
+	DIVU.L	D5,D4			; 2^24 / span
+	MOVE.W	D5,D3
+	LSR.W	#8,D3			; k
+	AND.W	#$FF,D5			; the fraction
+	MOVE.L	(MixGainNow.L,D6.W*4),D7
+	LEA	MixPre,A1
+	MOVEQ	#0,D1
+.b:	MOVEQ	#0,D0
+	MOVE.W	D1,D0
+	ADD.W	D3,D0
+	MOVEQ	#0,D2
+	MOVE.W	(A1,D0.W*2),D2
+	SUB.W	(A1,D1.W*2),D2		; the k whole steps
+	LSL.L	#8,D2
+	AND.W	#31,D0
+	MOVE.B	(A0,D0.W),D0
+	MULU.W	D5,D0
+	ADD.L	D0,D2			; sum x 256, at most 31 x span
+	MULU.L	D4,D2
+	SWAP	D2			; the average, 8.8
+	ADD.W	D2,D2
+	SUB.W	#31*256,D2
+	EXT.L	D2
+	MOVE.L	D7,D0
+	CLR.W	D0
+	SWAP	D0
+	MULS.L	D2,D0
+	CLR.W	D0			; left << 16
+	MOVE.L	D0,A2
+	MOVEQ	#0,D0
+	MOVE.W	D7,D0
+	MULS.L	D2,D0
+	SWAP	D0
+	EXT.L	D0			; right
+	ADD.L	A2,D0
+	MOVE.L	D0,(A3)+
+	ADDQ.W	#1,D1
+	CMP.W	#32,D1
+	BNE.S	.b
+	MOVEM.L	(SP)+,D0-D7/A1-A3
+	RTS
+
+; Test builds, HuCards: MixBuf (L * 65536 + R at half scale) -> L, R words. A
+; one-pole high-pass per side (about 7 Hz) takes out DC, the block's peak sets the
+; gain: down at once when the soft knee could not hold the peak, up a step (3 dB)
+; after MIXAGCUP frames that would stay under the knee at the next step. The knee:
+; above 24576, y = 24576 + d - d * d / 32768, full scale at d = 16384.
+MIXAGC0	= 4
+MIXAGCUP	= 180
+MixAgcOut:
+	LEA	MixBuf,A0
+	MOVE.L	MixHpL,D4
+	MOVE.L	MixHpR,D5
+	MOVEQ	#0,D6			; the peak
+	MOVE.W	MixN,D7
+	SUBQ.W	#1,D7
+.h:	MOVE.L	(A0),D0
+	MOVE.W	D0,D1
+	EXT.L	D1
+	SUB.L	D1,D0
+	SWAP	D0
+	EXT.L	D0
+	MOVE.L	D0,D2			; left
+	LSL.L	#8,D2
+	SUB.L	D4,D2
+	ASR.L	#8,D2
+	ASR.L	#1,D2
+	ADD.L	D2,D4
+	MOVE.L	D4,D2
+	ASR.L	#8,D2
+	SUB.L	D2,D0
+	MOVE.L	D1,D2			; right
+	LSL.L	#8,D2
+	SUB.L	D5,D2
+	ASR.L	#8,D2
+	ASR.L	#1,D2
+	ADD.L	D2,D5
+	MOVE.L	D5,D2
+	ASR.L	#8,D2
+	SUB.L	D2,D1
+	MOVE.W	D0,D2
+	EXT.L	D2
+	CMP.L	D0,D2
+	BEQ.S	.l1
+	TST.L	D0
+	SPL	D0
+	EXT.W	D0
+	EOR.W	#$8000,D0
+.l1:	MOVE.W	D1,D2
+	EXT.L	D2
+	CMP.L	D1,D2
+	BEQ.S	.r1
+	TST.L	D1
+	SPL	D1
+	EXT.W	D1
+	EOR.W	#$8000,D1
+.r1:	MOVE.W	D0,(A0)+
+	MOVE.W	D1,(A0)+
+	TST.W	D0
+	BPL.S	.a0
+	NEG.W	D0
+	BVC.S	.a0
+	MOVE.W	#32767,D0
+.a0:	CMP.W	D0,D6
+	BCC.S	.a1
+	MOVE.W	D0,D6
+.a1:	TST.W	D1
+	BPL.S	.a2
+	NEG.W	D1
+	BVC.S	.a2
+	MOVE.W	#32767,D1
+.a2:	CMP.W	D1,D6
+	BCC.S	.a3
+	MOVE.W	D1,D6
+.a3:	DBF	D7,.h
+	MOVE.L	D4,MixHpL
+	MOVE.L	D5,MixHpR
+	LEA	MixAgcT,A1		; the gain for this block
+	MOVE.W	MixAgcI,D3
+.dn:	TST.W	D3
+	BEQ.S	.up
+	MOVE.W	(A1,D3.W*2),D0
+	MULU.W	D6,D0
+	LSR.L	#7,D0
+	CMP.L	#24576+16384,D0
+	BLS.S	.up
+	SUBQ.W	#1,D3
+	CLR.W	MixAgcN
+	BRA.S	.dn
+.up:	CMP.W	#6,D3
+	BEQ.S	.g
+	MOVE.W	2(A1,D3.W*2),D0
+	MULU.W	D6,D0
+	LSR.L	#7,D0
+	CMP.L	#24576,D0
+	BLS.S	.q
+	CLR.W	MixAgcN
+	BRA.S	.g
+.q:	ADDQ.W	#1,MixAgcN
+	CMP.W	#MIXAGCUP,MixAgcN
+	BCS.S	.g
+	CLR.W	MixAgcN
+	ADDQ.W	#1,D3
+.g:	MOVE.W	D3,MixAgcI
+	MOVE.W	(A1,D3.W*2),D2		; gain, 128 = x1 of half scale
+	MULU.W	D2,D6
+	LSR.L	#7,D6
+	LEA	MixBuf,A0
+	MOVE.W	MixN,D7
+	ADD.W	D7,D7
+	SUBQ.W	#1,D7
+	CMP.L	#24576,D6
+	BHI.S	.k
+.f:	MOVE.W	(A0),D0			; under the knee all through
+	MULS.W	D2,D0
+	ASR.L	#7,D0
+	MOVE.W	D0,(A0)+
+	DBF	D7,.f
+	RTS
+.k:	MOVE.W	(A0),D0
+	MULS.W	D2,D0
+	ASR.L	#7,D0
+	BPL.S	.kp
+	NEG.L	D0
+	BSR.S	MixKnee
+	NEG.W	D0
+	BRA.S	.kw
+.kp:	BSR.S	MixKnee
+.kw:	MOVE.W	D0,(A0)+
+	DBF	D7,.k
+	RTS
+	IFEQ	ToneOff
+; MixTone: Sound tone Soft, MixBuf's L, R words through a one-pole low-pass at 4.5 kHz (6 dB an
+; octave, about the A500's fixed filter), bilinear at 22168 Hz, coefficients x 16384 (as Arnold's
+; Sound tone): y = (6973 * (x + x1) + 2437 * y1 + 8192) >> 14. The gain is at most 1, so y fits a word.
+; It takes off the top octave the 22 kHz mix aliases into. Uses D0-D7/A0-A1.
+MixTone:
+	LEA	MixBuf,A0
+	LEA	MixToneS,A1
+	MOVEM.W	(A1),D2-D5		; x1, y1 left; x1, y1 right
+	MOVE.W	MixN,D7
+	SUBQ.W	#1,D7
+.t:	MOVE.W	(A0),D0			; left
+	MOVE.W	D0,D1
+	MULS.W	#6973,D1
+	MULS.W	#6973,D2
+	ADD.L	D2,D1
+	MULS.W	#2437,D3
+	ADD.L	D3,D1
+	ADD.L	#8192,D1
+	ASR.L	#8,D1
+	ASR.L	#6,D1
+	MOVE.W	D0,D2
+	MOVE.W	D1,D3
+	MOVE.W	D1,(A0)+
+	MOVE.W	(A0),D0			; right
+	MOVE.W	D0,D1
+	MULS.W	#6973,D1
+	MULS.W	#6973,D4
+	ADD.L	D4,D1
+	MULS.W	#2437,D5
+	ADD.L	D5,D1
+	ADD.L	#8192,D1
+	ASR.L	#8,D1
+	ASR.L	#6,D1
+	MOVE.W	D0,D4
+	MOVE.W	D1,D5
+	MOVE.W	D1,(A0)+
+	DBF	D7,.t
+	MOVE.W	D2,(A1)+
+	MOVE.W	D3,(A1)+
+	MOVE.W	D4,(A1)+
+	MOVE.W	D5,(A1)
+	RTS
+	ENDC
+
+; D0.L = level, 0 or more -> D0.w, at most 32767. Uses D1.
+MixKnee:
+	CMP.L	#24576,D0
+	BLS.S	.x
+	SUB.L	#24576,D0
+	CMP.L	#16384,D0
+	BCC.S	.m
+	MOVE.W	D0,D1
+	MULU.W	D1,D1
+	ADD.L	D1,D1
+	SWAP	D1
+	SUB.W	D1,D0
+	ADD.W	#24576,D0
+.x:	RTS
+.m:	MOVE.W	#32767,D0
+	RTS
+MixAgcT:	DC.W	128,181,256,362,512,724,1024
+	ENDC
 
 ; DDA on, no samples this frame: the channel holds its last level.
 MixHold:
@@ -421,6 +715,15 @@ MixStart:
 	CLR.L	(A0)+
 	MOVE.L	#-1,MixStale
 	MOVE.L	#-1,MixStale+4
+	IFNE	MIXV2
+	MOVE.L	#MIXAGC0<<16,MixAgcI	; the gain starts at x2, the up count at 0
+	CLR.L	MixHpL
+	CLR.L	MixHpR
+	ENDC
+	IFEQ	ToneOff
+	CLR.L	MixToneS
+	CLR.L	MixToneS+4
+	ENDC
 	TST.L	MixLfsr
 	BNE.S	.lf
 	MOVE.L	#$ACE1ACE1,MixLfsr
@@ -634,11 +937,22 @@ MixLineStep:	DS.L	1
 MixLfsr:	DS.L	1
 MixLines:	DS.L	1		; DbgRows: scan lines in the mix
 MixF:		DS.W	6		; the frequency MixInc was made for
+	IFNE	MIXV2
+MixSpan:	DS.W	6		; wave steps a sample, 8.8, the table was made for (0: under one)
+MixPre:		DS.W	65		; prefix sums of a wave, twice round
+MixHpL:		DS.L	1		; the high-pass state, x 256
+MixHpR:		DS.L	1
+MixAgcI:	DS.W	1		; gain step
+MixAgcN:	DS.W	1		; frames the next step up would have fitted
+	ENDC
 MixN:		DS.W	1		; samples this frame
+	IFEQ	ToneOff
+MixToneS:	DS.W	4		; Sound tone Soft: x1, y1 left; x1, y1 right
+	ENDC
 MixCfg:		DS.B	SC_SIZE
 MixStale:	DS.B	8		; the wave steps need rebuilding
 MixRun:		DS.B	1		; SndOut started in this run
-PSGMixOn:	DS.B	1		; this run mixes: SOUNDMIX and RTG
+PSGMixOn:	DS.B	1		; this run mixes: a CD game, or SOUNDMIX
 SndMixWant:	DS.B	2		; ToolType or CLI word
 	IFNE	SndStat
 	CNOP	0,4

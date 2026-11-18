@@ -35,10 +35,11 @@ OUTDIR    default release/drawer (not in git). Result:
           default tool is AGA. Costs one more binary in the archive.
 
 What goes in the drawer (2.0): the program "AGA", its icon, the RTG icon, ReadMe.txt,
-CHANGES.txt, and the empty Homebrew drawer (the program's
-Insert requester opens PROGDIR:Homebrew) with a short note in it, and the Saves
-drawer for backup RAM, with a note too. NO ROMs: the
-script fails if anything that looks like a HuCard or disc image is staged.
+CHANGES.txt, the Homebrew drawer (the program's Insert requester opens
+PROGDIR:Homebrew) with a short note and PadTest.pce (2.3: our own pad test HuCard,
+tools/padtest_hucard.py), and the Saves drawer for backup RAM, with a note too. NO ROMs:
+the script fails if anything that looks like a HuCard or disc image is staged, apart
+from PadTest.pce byte for byte as the script builds it.
 
 The LhA step is not here: it runs in WinUAE (winuae/make_lha.ps1).
 
@@ -254,12 +255,26 @@ def build(mode):
                                         "colourdebug": "AmiPCEngine_ColourDebug"}[mode])
 
 
+def padtest_rom():
+    """PadTest.pce as tools/padtest_hucard.py builds it now (our own HuCard, no game data)."""
+    import subprocess, tempfile
+    with tempfile.TemporaryDirectory() as t:
+        p = os.path.join(t, "PadTest.pce")
+        subprocess.run([sys.executable, "-I", os.path.join(BASE, "tools", "padtest_hucard.py"), p],
+                       check=True, capture_output=True)
+        return open(p, "rb").read()
+
+
 def check_no_roms(out):
-    """No HuCard, disc image or archive may be staged; nothing big except the programs."""
+    """No HuCard, disc image or archive may be staged; nothing big except the programs. The one
+    exception: Homebrew/PadTest.pce, and only byte for byte as the script builds it."""
+    pad = padtest_rom()
     for root, _, files in os.walk(out):
         for f in files:
             p = os.path.join(root, f)
             ext = os.path.splitext(f)[1].lower()
+            if f == "PadTest.pce" and os.path.basename(root) == "Homebrew" and open(p, "rb").read() == pad:
+                continue
             if ext in ROM_EXT:
                 sys.exit("ROM-like file staged: %s" % p)
             if f not in PROGRAMS and os.path.getsize(p) > 100000:
@@ -302,6 +317,7 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False, colour=None, 
     amiga_text(os.path.join(BASE, "CHANGES.md"), os.path.join(d, "CHANGES.txt"), version, draft, wrap=76)
     amiga_text(os.path.join(BASE, "release", "AmiPCEngine.readme"), os.path.join(out, "AmiPCEngine.readme"), version, draft)
     open(os.path.join(d, "Homebrew", "Put HuCards here.txt"), "wb").write(HOMEBREW_NOTE.encode("ascii"))
+    open(os.path.join(d, "Homebrew", "PadTest.pce"), "wb").write(padtest_rom())   # the pad test (ReadMe)
     im = draw_drawer()
     di = drawer_icon(im)
     put("Homebrew.info", di)                                           # the ROM drawer's icon

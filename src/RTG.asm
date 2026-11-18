@@ -336,6 +336,17 @@ RtgToolType:
 	ST	SndMixWant
 .fr1:
 	ENDC
+	IFEQ	NO_NTSCRATE
+	MOVE.L	D4,A0			; PLAINNTSC
+	MOVE.L	$36(A0),A0
+	LEA	RtgPlainNom(PC),A1
+	MOVE.L	D5,A6
+	JSR	-96(A6)			; FindToolType
+	TST.L	D0
+	BEQ.S	.fr2
+	ST	BeamPlain
+.fr2:
+	ENDC
 	IFEQ	CdSndOff
 	MOVE.L	D4,A0			; CDMUSIC=percent
 	MOVE.L	$36(A0),A0
@@ -369,9 +380,7 @@ RtgCliArg:
 	IFEQ	NO_RTGMODE
 	BSR	RtgModeCli		; RTGMODE=... (A0 kept)
 	ENDC
-	IFEQ	MixOff
-	BSR	RtgMixCli		; SOUNDMIX (A0 kept)
-	ENDC
+	BSR	RtgWordsCli		; SOUNDMIX, PLAINNTSC (A0 kept)
 	IFEQ	CdSndOff
 	JSR	CdMusCli		; CDMUSIC=... (A0 kept)
 	ENDC
@@ -2936,14 +2945,32 @@ RtgScanVal:
 .x:	MOVEM.L	(SP)+,D0-D1
 	RTS
 
+; RtgWordsCli: A0 = the CLI arguments; SOUNDMIX and PLAINNTSC anywhere (any case).
+RtgWordsCli:
+	MOVEM.L	D0-D1/A1-A2,-(SP)
 	IFEQ	MixOff
-; RtgMixCli: A0 = the CLI arguments; SOUNDMIX anywhere (any case).
-RtgMixCli:
-	MOVEM.L	D0-D1/A0-A2,-(SP)
-.s:	TST.B	(A0)
-	BEQ.S	.x
-	MOVE.L	A0,A1
 	LEA	RtgMixNom(PC),A2
+	BSR.S	RtgWord
+	BEQ.S	.p
+	ST	SndMixWant
+.p:
+	ENDC
+	IFEQ	NO_NTSCRATE
+	LEA	RtgPlainNom(PC),A2
+	BSR.S	RtgWord
+	BEQ.S	.x
+	ST	BeamPlain
+	ENDC
+.x:	MOVEM.L	(SP)+,D0-D1/A1-A2
+	RTS
+; RtgWord: A0 = the CLI arguments, A2 = a word in capitals. D0 = 1 (NE) when the word is
+; there in any case, else 0 (EQ). A0 and A2 kept, D1/A1 used.
+RtgWord:
+	MOVEM.L	A0/A2,-(SP)
+.s:	TST.B	(A0)
+	BEQ.S	.no
+	MOVE.L	A0,A1
+	MOVE.L	4(SP),A2
 .c:	MOVE.B	(A2)+,D1
 	BEQ.S	.hit
 	MOVE.B	(A1)+,D0
@@ -2956,12 +2983,15 @@ RtgMixCli:
 	BEQ.S	.c
 	ADDQ.L	#1,A0
 	BRA.S	.s
-.hit:	ST	SndMixWant
-.x:	MOVEM.L	(SP)+,D0-D1/A0-A2
+.no:	MOVEM.L	(SP)+,A0/A2
+	MOVEQ	#0,D0
+	RTS
+.hit:	MOVEM.L	(SP)+,A0/A2
+	MOVEQ	#1,D0
 	RTS
 RtgMixNom:	DC.B	"SOUNDMIX",0
+RtgPlainNom:	DC.B	"PLAINNTSC",0
 	EVEN
-	ENDC
 
 ; RtgScanCli: A0 = the CLI arguments; SCANLINES=value anywhere (any case).
 RtgScanCli:

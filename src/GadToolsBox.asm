@@ -873,7 +873,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
+	IFEQ	NO_REL23
+    DC.B    'AmiPC-Engine Emulator v2.3  (Debug rows)',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.2  (Debug rows)',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.1  (Debug rows)',0
 	ENDC
@@ -899,7 +903,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
+	IFEQ	NO_REL23
+    DC.B    'AmiPC-Engine Emulator v2.3',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.2',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.1',0
 	ENDC
@@ -1980,7 +1988,11 @@ AboutIText0:
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
+	IFEQ	NO_REL23
+    DC.B    'AmiPC-Engine Emulator v2.3',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.2',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.1',0
 	ENDC
@@ -2007,7 +2019,11 @@ AboutIText1:
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
+	IFEQ	NO_REL23
+    DC.B    '(18 November 2026)',0
+	ELSE
     DC.B    '(17 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(14 November 2026)',0
 	ENDC
@@ -2034,7 +2050,11 @@ AboutITextZ:
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
+	IFEQ	NO_REL23
+    DC.B    'Version 2.3: z00p',0
+	ELSE
     DC.B    'Version 2.2: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 2.1: z00p',0
 	ENDC
@@ -2549,6 +2569,50 @@ MainMenuNewMenu0:
     DC.L    MainMenuMComm18
     DC.W    $0000
     DC.L    0,0
+	IFEQ	MixOff
+    DC.B    1,0			; Sound: one of two ticked (PonPrefs, SndPick0/1)
+    DC.L    MainMenuMNameSnd
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+MainMenuNewSnd0:
+    DC.B    2,0
+    DC.L    MainMenuMNameSnd0
+    DC.L    0
+    DC.W    $0001		; CHECKIT
+    DC.L    2,0
+MainMenuNewSnd1:
+    DC.B    2,0
+    DC.L    MainMenuMNameSnd1
+    DC.L    0
+    DC.W    $0001
+    DC.L    1,0
+	IFEQ	NO_TONE
+    DC.B    1,0			; Tone: one of three ticked (PonPrefs, TonePick0-2)
+    DC.L    MainMenuMNameTone
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+MainMenuNewTone0:
+    DC.B    2,0
+    DC.L    MainMenuMNameTone0
+    DC.L    0
+    DC.W    $0001
+    DC.L    6,0
+MainMenuNewTone1:
+    DC.B    2,0
+    DC.L    MainMenuMNameTone1
+    DC.L    0
+    DC.W    $0001
+    DC.L    5,0
+MainMenuNewTone2:
+    DC.B    2,0
+    DC.L    MainMenuMNameTone2
+    DC.L    0
+    DC.W    $0001
+    DC.L    3,0
+	ENDC
+	ENDC
     DC.B    0,0
     DC.L    0
     DC.L    0
@@ -2615,6 +2679,20 @@ MainMenuMComm15:
 
 MainMenuMName16:
     DC.B    'Cartridges  ',0
+MainMenuMNameSnd:
+    DC.B    'Sound  ',0
+MainMenuMNameSnd0:
+    DC.B    'Original stereo',0
+MainMenuMNameSnd1:
+    DC.B    'Full channel mix',0
+MainMenuMNameTone:
+    DC.B    'Tone  ',0
+MainMenuMNameTone0:
+    DC.B    'Bright (unfiltered)',0
+MainMenuMNameTone1:
+    DC.B    'Soft (4.5 kHz)',0
+MainMenuMNameTone2:
+    DC.B    'Warm (A1200 filter)',0
 
 MainMenuMName17:
     DC.B    'Insert Cartridge',0

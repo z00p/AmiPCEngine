@@ -307,6 +307,9 @@ PSGAllocate:
 	IFEQ	NO_PSGBASS
 	BSR	PSGBassUp
 	ENDC
+	IFNE	PSGFAIR
+	BSR	PSGNoteBonus
+	ENDC
 	MOVE.W	D1,(PSGScore.L,D6.W*2)
 	MOVE.B	D2,(PSGPan.L,D6.W)
 	ADDQ.W	#1,D6
@@ -468,6 +471,63 @@ PSGSideL:	DC.B	0,3,1,2
 PSGSideR:	DC.B	1,2,0,3
 PSGVoiceOwner:	DC.B	-1,-1,-1,-1	; PSG channel per Paula voice, -1 = free
 PSGScore:	DS.W	6
+	IFNE	PSGFAIR
+; PSGNoteBonus (test builds): D6 = channel, D1.w = its score (0 = silent). A new
+; note (keyed on from silence, a pitch change of more than 1/16, about a semitone,
+; or 8 or more volume steps louder) gets a bonus of 3 x its age, 24 falling by 3 a
+; frame, at most twice its volume: a fresh harmony note wins a voice from one held
+; for a while, and vibrato is not a new note. Model: psgdrop.py --fair --fairmode
+; semi --faircap 2 (Blazing Lazers: channel 2's missed notes 57% -> 7%). Keeps all but D1.
+PSGNoteBonus:
+	MOVEM.L	D0/D3/A1,-(SP)
+	TST.W	D1
+	BNE.S	.on
+	MOVE.W	#-1,(PSGPrevFreq.L,D6.W*2)	; silent: the next sound is a new note
+	CLR.B	(PSGPrevVol.L,D6.W)
+	CLR.B	(PSGNoteAge.L,D6.W)
+	BRA.S	.x
+.on:	LEA	PSGBuffer,A1
+	MOVE.W	D6,D3
+	LSL.W	#3,D3
+	ADD.W	D3,A1
+	MOVEQ	#0,D0
+	MOVE.B	3(A1),D0
+	AND.B	#$0F,D0
+	LSL.W	#8,D0
+	MOVE.B	2(A1),D0		; the frequency divider, 12 bits
+	MOVE.W	(PSGPrevFreq.L,D6.W*2),D3
+	BMI.S	.new			; keyed on from silence
+	SUB.W	D0,D3
+	BPL.S	.abs
+	NEG.W	D3
+.abs:	LSL.W	#4,D3
+	CMP.W	D0,D3
+	BHI.S	.new			; changed by more than 1/16
+	MOVE.B	(PSGPrevVol.L,D6.W),D3
+	ADDQ.B	#8,D3
+	CMP.B	D3,D1
+	BLS.S	.age
+.new:	MOVE.B	#8,(PSGNoteAge.L,D6.W)
+.age:	MOVE.W	D0,(PSGPrevFreq.L,D6.W*2)
+	MOVE.B	D1,(PSGPrevVol.L,D6.W)
+	MOVEQ	#0,D0
+	MOVE.B	(PSGNoteAge.L,D6.W),D0
+	BEQ.S	.x
+	SUBQ.B	#1,(PSGNoteAge.L,D6.W)
+	MULU	#3,D0
+	MOVE.W	D1,D3
+	ADD.W	D3,D3
+	CMP.W	D3,D0
+	BLS.S	.add
+	MOVE.W	D3,D0
+.add:	ADD.W	D0,D1
+.x:	MOVEM.L	(SP)+,D0/D3/A1
+	RTS
+PSGPrevFreq:	DCB.W	6,-1
+PSGPrevVol:	DS.B	6
+PSGNoteAge:	DS.B	6
+	EVEN
+	ENDC
 PSGPan:		DS.B	6
 PSGPick:	DS.B	6
 	EVEN

@@ -1687,7 +1687,12 @@ CdMixAdL:	CdMixPos
 	ASR.L	#7,D2
 	ADD.L	D2,D0
 	MULS.L	D6,D0
+	IFEQ	AdGain-8
 	ASR.L	#5,D0			; 2048 * 256 / 32 = 16384
+	ELSE
+	MULS.L	#AdGain,D0		; (sample - 2048) x AdGain
+	ASR.L	#8,D0
+	ENDC
 	MOVE.L	D0,-(SP)
 	CdMixAdd
 	MOVE.L	(SP)+,D0

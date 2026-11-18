@@ -398,6 +398,9 @@ Programa:
 	TST.L	_AslBase(PC)
 	BEQ.S	NoHayAsl
 
+	IFNE	TestHome
+	BSR	TestHomeDir
+	ENDC
 	MOVEQ	#0,D0
 	LEA	InsTags(PC),A0
 	MOVE.L	MainMenuWnd,4(A0)
@@ -580,6 +583,7 @@ ContinueCon:
 	ELSE
 	MOVEQ	#0,D1
 	IFNE	AGC
+	IFNE	NO_AGAPAL|DbgRows
 	TST.B	AgcWant			; AGA colour mode: NTSC (the screen gadget is ghosted); with the debug
 	BEQ.S	.agcntsc		; rows PAL: only PAL has room for the rows under the picture
 	IFNE	DbgRows
@@ -587,6 +591,7 @@ ContinueCon:
 	ENDC
 	BRA.S	NoEsNTSC
 .agcntsc:
+	ENDC
 	ENDC
 	ENDC
 	TST.B	$0F(A5)			; Frecuencia pantalla.
@@ -1432,8 +1437,10 @@ ActuPrefs:
 	MOVEQ	#0,D0
 	BSR	GetGadgetValue
 	IFNE	AGC
+	IFNE	NO_AGAPAL|DbgRows
 	TST.B	AgcWant			; the colour program: Screen and Display are fixed, the saved ones stay
 	BNE.S	.agc
+	ENDC
 	ENDC
 	MOVE.B	D0,$0F(A5)		; Screen
 	IFEQ	DispOff
@@ -1495,7 +1502,7 @@ PonPrefs:
 	MOVEQ	#0,D2
 	MOVE.B	$0F(A5),D2		; Screen
 	AND.W	#1,D2
-	IFNE	AGC
+	IFNE	AGC&(NO_AGAPAL|DbgRows)
 	TST.B	AgcWant			; AGA colour mode: ghosted, NTSC (with the debug rows PAL: ContinueCon)
 	BEQ.S	.scr
 	MOVEQ	#1,D2
@@ -1544,6 +1551,37 @@ PonPrefs:
 	MOVE.W	#GD_Refresh,D0
 	MOVE.L	#$8003000E,D1
 	BSR	PonTag
+	ENDC
+	ENDC
+	IFEQ	MixOff
+	TST.B	SndMixWant		; the ToolType / CLI word SOUNDMIX: start on the mix
+	BEQ.S	.snd
+	MOVE.B	#1,$1C(A5)
+.snd:	TST.B	$1C(A5)			; Sound: the saved setting, its menu tick
+	SNE	SndMixWant
+	BCLR	#0,MainMenuNewSnd0+10	; nm_Flags' CHECKED ($0100) off in both
+	BCLR	#0,MainMenuNewSnd1+10
+	LEA	MainMenuNewSnd0+10,A0
+	TST.B	SndMixWant
+	BEQ.S	.snt
+	LEA	MainMenuNewSnd1+10,A0
+.snt:	BSET	#0,(A0)
+	IFEQ	NO_TONE
+	BCLR	#0,MainMenuNewTone0+10	; Sound tone: its tick (prefs 0 Soft, 1 Bright, 2 Warm)
+	BCLR	#0,MainMenuNewTone1+10
+	BCLR	#0,MainMenuNewTone2+10
+	LEA	MainMenuNewTone1+10,A0
+	MOVE.B	$1D(A5),D0
+	BEQ.S	.tt
+	LEA	MainMenuNewTone0+10,A0
+	CMP.B	#1,D0
+	BEQ.S	.tt
+	LEA	MainMenuNewTone2+10,A0
+	CMP.B	#2,D0
+	BEQ.S	.tt
+	CLR.B	$1D(A5)			; anything else: Soft
+	LEA	MainMenuNewTone1+10,A0
+.tt:	BSET	#0,(A0)
 	ENDC
 	ENDC
 	RTS
@@ -2013,6 +2051,59 @@ ChooserLists:	DCB.B	MainMenu_CNT*12,0
 
 ; -----------------------------------
 
+	IFNE	TestHome
+; TestHomeDir (test builds, which sit in drawers under Test): the Insert requester
+; opens at the AmiPCEngine drawer, the nearest one at or above PROGDIR: holding
+; Originals. Written as a full path, so prefs saved from a test build stay right.
+; Nothing found: the prefs' drawer as before. Keeps all registers.
+TestHomeDir:
+	MOVEM.L	D0-D4/A0-A2/A6,-(SP)
+	MOVE.L	_DosBase,A6
+	LEA	THTab,A2
+.l:	MOVE.L	(A2)+,D4		; the drawer
+	BEQ.S	.x
+	MOVE.L	(A2)+,D1		; its Originals
+	MOVEQ	#-2,D2			; ACCESS_READ
+	JSR	-84(A6)			; Lock
+	TST.L	D0
+	BEQ.S	.l
+	MOVE.L	D0,D1
+	JSR	-90(A6)			; UnLock
+	MOVE.L	D4,D1
+	MOVEQ	#-2,D2
+	JSR	-84(A6)			; Lock the drawer
+	MOVE.L	D0,D4
+	BEQ.S	.x
+	MOVE.L	D4,D1
+	MOVE.L	#THBuf,D2
+	MOVE.L	#$100,D3
+	JSR	-402(A6)		; NameFromLock
+	MOVE.L	D0,D3
+	MOVE.L	D4,D1
+	JSR	-90(A6)			; UnLock
+	TST.L	D3
+	BEQ.S	.x
+	LEA	THBuf,A0
+	LEA	DirPrefs+$20,A1
+	MOVE.W	#$100-1,D0
+.c:	MOVE.B	(A0)+,(A1)+
+	DBF	D0,.c
+.x:	MOVEM.L	(SP)+,D0-D4/A0-A2/A6
+	RTS
+	CNOP	0,4
+THTab:	DC.L	THd0,THo0,THd1,THo1,THd2,THo2,THd3,THo3,0
+THd0:	DC.B	"PROGDIR:",0
+THo0:	DC.B	"PROGDIR:Originals",0
+THd1:	DC.B	"PROGDIR:/",0
+THo1:	DC.B	"PROGDIR:/Originals",0
+THd2:	DC.B	"PROGDIR://",0
+THo2:	DC.B	"PROGDIR://Originals",0
+THd3:	DC.B	"PROGDIR:///",0
+THo3:	DC.B	"PROGDIR:///Originals",0
+	CNOP	0,4
+THBuf:	DS.B	$100
+	ENDC
+
 LoadPrefs:
 	MOVE.L	#NOMPREFS,D1
 	MOVE.L	#1005,D2
@@ -2050,6 +2141,8 @@ COPIPREFS:
 ; Backup RAM, one 8 KB file per game: PROGDIR:Saves/<ROM name>.bup. Read before Power ON, written
 ; when a game returns to the menu and has changed it (the OS is frozen during play). A game that
 ; never changes it gets no file. Embedded test builds have no FileNom, so no saves.
+; A CD game's file is named after its .cue; while a disc has none, its backup RAM starts from
+; 2.2's shared file (BramShared), so a save made with 2.2 carries over.
 	CNOP	0,4
 BramLoad:
 	SF	BramGot
@@ -2057,15 +2150,32 @@ BramLoad:
 	TST.B	BramName
 	BEQ.S	.ret
 	MOVE.L	#BramName,D1
+	IFEQ	NO_CD|NO_CDBRAM1
+	SF	BramOld
+.try:
+	ENDC
 	MOVE.L	#1005,D2
 	BSR	OpenFile
+	IFEQ	NO_CD|NO_CDBRAM1
+	BEQ.S	.old
+	ELSE
 	BEQ.S	.ret
+	ENDC
 	MOVE.L	#BramDisk,D2
 	MOVE.L	#8*1024,D3
 	BSR	ReadFile
 	SEQ	BramGot			; a short file counts as no save
 	BSR	CloseFile
 .ret:	RTS
+	IFEQ	NO_CD|NO_CDBRAM1
+.old:	TST.B	CdOn			; a disc without its own file: 2.2's shared one, once
+	BEQ.S	.ret
+	TST.B	BramOld
+	BNE.S	.ret
+	ST	BramOld
+	MOVE.L	#BramShared,D1
+	BRA.S	.try
+	ENDC
 
 	CNOP	0,4
 BramSave:
@@ -2074,6 +2184,9 @@ BramSave:
 	ENDC
 	TST.B	BramName
 	BEQ.S	.ret
+	IFNE	BramPoke
+	ADDQ.B	#1,SRAM+$1F08		; (test builds) a byte past the CD's 2 KB changed: always a write
+	ENDC
 	LEA	SRAM,A0
 	LEA	BramDisk,A1
 	MOVE.W	#((8*1024)/4)-1,D0
@@ -2116,9 +2229,15 @@ BramMkName:
 	CLR.B	BramName
 	LEA	FileNom(PC),A0
 	IFEQ	NO_CD
+	IFEQ	NO_CDBRAM1
+	TST.B	CdOn			; a CD game: named after its .cue
+	BEQ.S	.hu
+	LEA	CdCueName,A0
+	ELSE
 	TST.B	CdOn			; CD games share one BRAM, as on the machine
 	BEQ.S	.hu
 	LEA	CdBramNom,A0
+	ENDC
 .hu:
 	ENDC
 	MOVE.L	A0,A1			; A1 base name
@@ -2194,7 +2313,21 @@ BramFind:
 	JSR	-90(A6)			; UnLock
 	LEA	tBramFound(PC),A0
 	BRA.S	.set
-.none:	LEA	tBramNone(PC),A0
+.none:
+	IFEQ	NO_CD|NO_CDBRAM1
+	TST.B	CdOn			; a disc: 2.2's shared file counts too (BramLoad starts from it)
+	BEQ.S	.none2
+	MOVE.L	#BramShared,D1
+	MOVEQ	#-2,D2
+	JSR	-84(A6)			; Lock
+	MOVE.L	D0,D1
+	BEQ.S	.none2
+	JSR	-90(A6)			; UnLock
+	LEA	tBramFound(PC),A0
+	BRA.S	.set
+.none2:
+	ENDC
+	LEA	tBramNone(PC),A0
 .set:	MOVE.L	A0,MainMenuText11+$C
 	RTS
 BramAfter:
@@ -2226,6 +2359,10 @@ BramWrote:	DC.B	0
 	EVEN
 	ENDC
 BramDir:	DC.B	"PROGDIR:Saves",0
+	IFEQ	NO_CD|NO_CDBRAM1
+BramShared:	DC.B	"PROGDIR:Saves/CD-ROM System.bup",0
+BramOld:	DC.B	0
+	ENDC
 BramGot:	DC.B	0
 	EVEN
 BramName:	DS.B	50
@@ -2291,8 +2428,10 @@ DirPrefs:
 	DC.B	$00		; $16 - port 1's pad (NO_MENU2=0: 0 none, 1 joystick, 2 CD32 pad, 3 joypad)
 
 	DC.B	$00		; $17 - Display (NO_MENU2=0: 0 AGA, else RTG)
-	DC.L	$00		; $18
-	DC.L	$00		; $1C
+	DC.L	$00		; $18 - RTG play mode (ModeID, 0 = automatic; RtgModeUse)
+	DC.B	$00		; $1C - Sound (NO_MENU2=0): 0 Original stereo (Paula voices), 1 Full channel mix (the software mix)
+	DC.B	$00		; $1D - Sound tone (NO_MENU2=0): 0 Soft (the default, also for older prefs files), 1 Bright, 2 Warm
+	DC.B	0,0		; $1E
 
 	IFEQ	NO_HOMEDIR
 	DC.B	"PROGDIR:Homebrew"	; $20 - the ROM drawer that comes with the emulator
@@ -3252,6 +3391,12 @@ GetGadgetValue:
 PunterosMenu:
 	DC.L	MenuProject
 	DC.L	MenuCartridges
+	IFEQ	MixOff
+	DC.L	MenuSound
+	ENDC
+	IFEQ	NO_TONE
+	DC.L	MenuTone
+	ENDC
 	DC.L	0,0
 MenuProject:
 	DC.L	About			; About
@@ -3263,6 +3408,38 @@ MenuProject:
 MenuCartridges:
 	DC.L	Insert			; Insert Cartridge
 	DC.L	Eject			; Eject  Cartridge
+	IFEQ	MixOff
+MenuSound:
+	DC.L	SndPick0		; Original stereo
+	DC.L	SndPick1		; Full channel mix
+	IFEQ	NO_TONE
+MenuTone:
+	DC.L	TonePick0		; Bright
+	DC.L	TonePick1		; Soft
+	DC.L	TonePick2		; Warm
+	ENDC
+; SndPick0/1: the Sound menu (Intuition moves the tick). The next Power ON / Continue, kept by Save Prefs.
+SndPick0:
+	CLR.B	DirPrefs+$1C
+	SF	SndMixWant
+	RTS
+SndPick1:
+	MOVE.B	#1,DirPrefs+$1C
+	ST	SndMixWant
+	RTS
+	IFEQ	NO_TONE
+; TonePick0-2: Sound tone (prefs $1D: 1 Bright, 0 Soft, 2 Warm), from the next Power ON / Continue.
+TonePick0:
+	MOVE.B	#1,DirPrefs+$1D
+	RTS
+TonePick1:
+	CLR.B	DirPrefs+$1D
+	RTS
+TonePick2:
+	MOVE.B	#2,DirPrefs+$1D
+	RTS
+	ENDC
+	ENDC
 	ELSE
 PunterosMenu:
 	DC.L	MenuProject

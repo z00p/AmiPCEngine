@@ -1,5 +1,6 @@
 ; Lupa.asm - a game named at start (launchers such as Lupa, the Shell, a HuCard project icon).
 ;   AmiPCEngine [ROM] [AGA|RTG] [ONEGAME] [MENU] [PROFILE=030|FAST|AUTO] [RTGMODE=..] [SCANLINES=..]
+;   [SOUNDMIX] [PLAINNTSC] (read by RtgCliArg; here they are only kept from being the ROM)
 ; ROM: the first word that is not a keyword (or any "quoted" word); from Workbench, a project
 ; icon whose default tool is the program (sm_ArgList[1]). It is loaded as Insert would and
 ; powered on at once; MENU: loaded, the menu stays. ONEGAME: leaving the game (Esc, Help,
@@ -36,6 +37,7 @@ LupaArgs:
 	JMP	.tab(PC,D0.W)
 .tab:	DC.W	.aga-.tab,.rtg-.tab,.one-.tab,.menu-.tab,.prof-.tab
 	DC.W	.val-.tab,.val-.tab,.val-.tab,.val-.tab
+	DC.W	.next-.tab,.next-.tab	; SOUNDMIX, PLAINNTSC: RtgCliArg's words, not a file name
 .aga:	MOVE.B	#1,LupaDisp
 	BRA	.next
 .rtg:	MOVE.B	#2,LupaDisp
@@ -320,7 +322,8 @@ LupaTestCnt:	DC.L	LupaTest	; (test builds) frames left in the game
 	ENDC
 LupaMax=256
 LupaKeys:	DC.B	"AGA",0,"RTG",0,"ONEGAME",0,"MENU",0,"PROFILE",0
-		DC.B	"PREFS",0,"P",0,"RTGMODE",0,"SCANLINES",0,0
+		DC.B	"PREFS",0,"P",0,"RTGMODE",0,"SCANLINES",0
+		DC.B	"SOUNDMIX",0,"PLAINNTSC",0,0
 LupaKAga:	DC.B	"AGA",0
 LupaKOne:	DC.B	"ONEGAME",0
 LupaKMenu:	DC.B	"MENU",0

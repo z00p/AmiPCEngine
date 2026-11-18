@@ -46,6 +46,9 @@ LogSum=0
 	IFND	NO_HOMEDIR	; 1 = Juan's default ROM drawer "Cartridges" (relative to the current dir)
 NO_HOMEDIR=0
 	ENDC
+	IFND	TestHome	; (test builds) 1 = Insert opens at the nearest drawer at or above PROGDIR: that holds Originals
+TestHome=0
+	ENDC
 	IFND	NO_SPR10	; 1 = Juan's 9-bit sprite X/Y (sprites parked at Y $2xx wrap onto the screen)
 NO_SPR10=0
 	ENDC
@@ -337,6 +340,9 @@ NO_TILEWRAP=0
 	IFND	NO_SATLAG	; 1 = sprites drawn from the SAT the VDC copies at this frame's vblank (one frame early); 0 = from the SAT the frame was shown with, as the VDC (Power Tennis's net sprite over the scrolling net)
 NO_SATLAG=0
 	ENDC
+	IFND	PSGFAIR		; 0 = the 2.2 voice picker; 1 = a new note (key-on, a pitch change over 1/16, 8 volume steps louder) gets a voice bonus of 24 falling by 3 a frame, at most twice its volume
+PSGFAIR=1
+	ENDC
 	IFND	NO_PSGSTICK	; 1 = a channel that has a Paula voice keeps it with a bonus of 6 (Paula volume units); 0 = 20, so channels change speaker less often
 NO_PSGSTICK=0
 	ENDC
@@ -357,6 +363,15 @@ NO_IOBUF=0
 	ENDC
 	IFND	NO_BURST	; 1 = BG and sprites off show colour 0; 0 = VCE entry $100, as the VDC's burst mode (Chew Man Fu, black between screens)
 NO_BURST=0
+	ENDC
+	IFND	NO_LATCH200	; 1 = the CD32 pad reader's latch wait is 35 CIA reads (2.2); 0 = 200
+NO_LATCH200=0
+	ENDC
+	IFND	BramPoke	; test builds: BramSave always finds a change (SRAM+$1F08 counted up)
+BramPoke=0
+	ENDC
+	IFND	NO_CDBRAM1	; 1 = all CD games share one save file, "CD-ROM System" (2.2); 0 = one per disc, named after
+NO_CDBRAM1=0		; its .cue, started from 2.2's shared file while the disc has none of its own
 	ENDC
 	IFND	NO_BRAMSAVE	; 1 = backup RAM starts blank at every Power ON and nothing is kept; 0 = kept per game in PROGDIR:Saves
 NO_BRAMSAVE=0
@@ -443,6 +458,12 @@ NO_MENU2=0
 	IFND	NO_REL22	; 1 = 2.1 version texts
 NO_REL22=0
 	ENDC
+	IFND	NO_REL23	; 1 = 2.2 version texts
+NO_REL23=0
+	ENDC
+	IFND	NO_AGAPAL	; 1 = the colour program's AGA screen always NTSC, the Screen gadget ghosted (2.0-2.2); 0 = Screen works on AGA too (PAL: 5/6 speed)
+NO_AGAPAL=0
+	ENDC
 	IFND	NO_REL21	; 1 = 2.0 version texts
 NO_REL21=0
 	ENDC
@@ -461,7 +482,7 @@ NO_REL12=0
 	IFND	NO_SNDOUT	; 1 = no stereo output core on Paula (src/SndOut.asm, from AmiMSX's FMX ring)
 NO_SNDOUT=0
 	ENDC
-	IFND	NO_PSGMIX	; 1 = no software mix of the six PSG channels (ToolType / CLI word SOUNDMIX, RTG only, src/PSGMix.asm)
+	IFND	NO_PSGMIX	; 1 = no software mix of the six PSG channels (ToolType / CLI word SOUNDMIX, AGA and RTG, src/PSGMix.asm)
 NO_PSGMIX=0
 	ENDC
 	IFND	NO_SND14	; 1 = the mix is 8-bit on two voices; 0 = 14-bit on four (high byte at volume 64, low bits at volume 1)
@@ -472,6 +493,12 @@ SndStat=0
 	ENDC
 	IFND	CdPsgMute	; test builds: the mix without the PSG
 CdPsgMute=0
+	ENDC
+	IFND	AdGain		; ADPCM speech in the mix: (sample - 2048) x AdGain (13: Mesen's balance against the PSG; 2.2 had 8)
+AdGain=13
+	ENDC
+	IFND	MIXV2		; the software mix: box-filtered wave steps; HuCards also get an automatic gain (x0.5 to x4, 3 dB steps), a soft knee and a DC filter
+MIXV2=3			; bit 0: the box filter, bit 1: the output stage
 	ENDC
 	IFND	CdMusDef	; CD music level in the mix without CDMUSIC=: 512 = full scale (the disc's own level), 1024 = twice (the default)
 CdMusDef=1024
@@ -489,6 +516,10 @@ AdDump=0
 MIXFORCE=0
 	ENDC
 MixOff=NO_SNDOUT|NO_PSGMIX|DdaTickOff|NO_RTG	; the mix needs all of these
+	IFND	NO_TONE		; 1 = no Sound tone (2.2: the mix as made, the Amiga's audio filter always off); 0 = the Sound menu's tone,
+NO_TONE=0		; prefs $1D: Soft (0, a 4.5 kHz low-pass on the PSG mix), Bright (1, none), Warm (2, the Amiga's own audio filter on)
+	ENDC
+ToneOff=MixOff|NO_TONE|NO_MENU2
 	IFND	NO_CDSND	; 1 = CD audio and ADPCM silent (stage a); 0 = a CD game plays the PSG, CD audio and ADPCM through the mix (SndOut, AGA and RTG), its audio tracks read into RAM with the disc
 NO_CDSND=0
 	ENDC
@@ -625,7 +656,11 @@ NF_Menu:
 	IFEQ	NO_REL20
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
+	IFEQ	NO_REL23
+	DC.B	"$VER:AmiPC-Engine Emulator v2.3 (18.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.2 (17.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.1 (14.11.26)",0,0
 	ENDC
@@ -720,6 +755,12 @@ EmulatorStart:
 	BEQ.S	CdMixNo
 	ST	PSGMixOn		; a CD game: everything through the mix, AGA or RTG
 CdMixNo:
+	ENDC
+	IFEQ	MixOff
+	TST.B	SndMixWant
+	BEQ.S	HuMixNo
+	ST	PSGMixOn		; SOUNDMIX: a HuCard through the mix, AGA or RTG
+HuMixNo:
 	ENDC
 
 	JSR	InitPSG
@@ -2527,7 +2568,8 @@ DameVBR:MOVEC	VBR,A0
 ; everything ran 0.9% slow. A programmed frame (VARBEAMEN, LOLDIS) of 262 lines of 226 colour
 ; clocks is 59.90 Hz: NTSC's own line count, each line 1.5 colour clocks shorter. The syncs and
 ; blanking stay NTSC's hardwired ones, and the picture (lines $1D-$104) and the window's stop line
-; ($105) fall in the frame as on the plain NTSC screen. Not on an NTSC chip (VPOSR bit 12: its NTSC frame is already 59.83 Hz) or a
+; ($105) fall in the frame as on the plain NTSC screen. Not on an NTSC chip (VPOSR bit 12: its NTSC frame is already 59.83 Hz),
+; with PLAINNTSC, or on a
 ; PAL screen. VTOTAL is the last line of a short frame; a long one (LOF, as the OS leaves it) has
 ; one more. If the beam goes past VTOTAL+1 in 4 frames the chipset has no programmed beam: back
 ; to the plain NTSC frame.
@@ -2546,6 +2588,8 @@ BeamSet:
 	MOVE.W	#$1000,BeamTop
 	ENDC
 	BTST	#4,$04(A6)		; VPOSR bit 12: NTSC chip
+	BNE	.x
+	TST.B	BeamPlain		; PLAINNTSC: the plain NTSC frame
 	BNE	.x
 	MOVE.W	#BeamCC-1,$1C0(A6)	; HTOTAL
 	MOVE.W	#BeamLn-2,$1C8(A6)	; VTOTAL: 261 lines, 262 in a long frame
@@ -2607,6 +2651,7 @@ BeamSet:
 	RTS
 BeamMode:	DC.W	$20	; BEAMCON0 for the menu's Screen setting: 0 = NTSC, $20 = PAL (play start)
 BeamExact:	DC.B	0,0	; BeamSet's programmed frame runs
+BeamPlain:	DC.B	0,0	; ToolType / CLI word PLAINNTSC: the chipset's own NTSC frame, as 2.1 (for displays and emulators that show no programmed frame)
 BeamLines:	DC.W	0	; its lines (BeamSet)
 	IFNE	SndStat
 BeamTop:	DC.W	0	; the highest line BeamSet saw
@@ -2727,6 +2772,12 @@ EspIntV:NOP
 	BFEXTU	(A6){6:1},D7		; Filtro.
 	MOVE.B	D7,Filtro
 	BSET	#1,$BFE001		; Filtro OFF
+	IFEQ	ToneOff
+	CMP.B	#2,DirPrefs+$1D		; Sound tone Warm: the Amiga's own audio filter (the power light's) on while playing
+	BNE.S	ToneLedX
+	BCLR	#1,$BFE001
+ToneLedX:
+	ENDC
 ;;	-=-=-=-==-=-=-=-=-=-=-
 	RTS
 
