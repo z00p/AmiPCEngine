@@ -276,16 +276,28 @@ PushOne:MACRO
 ; --------------------------------------------
 
 CheckReadIO:MACRO
+	IFEQ	NO_ARCADE
+	TST.B	ArcSlot(A3,D1.W)	; slot 0 (the I/O page) or an Arcade Card bank
+	BEQ.S	\@NoReadIO
+	BSR	TrapRead
+	ELSE
 	BNE.S	\@NoReadIO
 	BSR	ReadIO
+	ENDC
 \@NoReadIO:
 	ENDM
 
 
 CheckWriteIO:MACRO
+	IFEQ	NO_ARCADE
+	TST.B	ArcSlot(A3,D1.W)
+	BEQ.S	\@NoWriteIO
+	BSR	TrapWrite
+	ELSE
 	TST.B	D1
 	BNE.S	\@NoWriteIO
 	BSR	WriteIO
+	ENDC
 \@NoWriteIO:
 	ENDM
 
@@ -2590,6 +2602,10 @@ BlkGo:	MOVEQ	#0,D3
 	LSR.W	#5,D0
 	CMP.B	#$FF,TabMap(A3,D0.W)
 	BEQ	.byte
+	IFEQ	NO_ARCADE
+	TST.B	ArcSlot(A3,D0.W)	; an Arcade Card port: a byte at a time
+	BMI	.byte
+	ENDC
 	MOVE.L	PagRead(A3,D0.W*4),A0
 	ADD.L	D3,A0
 	MOVE.W	D4,D1
@@ -2597,6 +2613,10 @@ BlkGo:	MOVEQ	#0,D3
 	LSR.W	#5,D1
 	CMP.B	#$FF,TabMap(A3,D1.W)
 	BEQ	.byte
+	IFEQ	NO_ARCADE
+	TST.B	ArcSlot(A3,D1.W)
+	BMI	.byte
+	ENDC
 	MOVE.L	PagWrite(A3,D1.W*4),A4
 	ADD.L	D4,A4
 	MOVE.W	D3,D0
@@ -2622,7 +2642,11 @@ BlkGo:	MOVEQ	#0,D3
 .ii:	MOVE.B	(A0)+,(A4)+
 	DBF	D0,.ii
 	TST.L	D5
+	IFEQ	NO_ARCADE
+	BNE	.loop
+	ELSE
 	BNE.S	.loop
+	ENDC
 	BRA	.done
 .dd:	ADDQ.L	#1,D0			; bytes to the start of each page
 	ADDQ.L	#1,D1
@@ -2654,9 +2678,20 @@ BlkGo:	MOVEQ	#0,D3
 	LSR.W	#5,D1
 	CMP.B	#$FF,TabMap(A3,D1.W)
 	BEQ.S	.rio
+	IFEQ	NO_ARCADE
+	TST.B	ArcSlot(A3,D1.W)
+	BMI.S	.rarc
+	ENDC
 	MOVE.L	PagRead(A3,D1.W*4),A4
 	MOVE.B	(A4,D0.L),BlkByte
 	BRA.S	.wr
+	IFEQ	NO_ARCADE
+.rarc:	MOVEQ	#3,D0
+	AND.B	TabMap(A3,D1.W),D0
+	JSR	ArcGet
+	MOVE.B	D1,BlkByte
+	BRA.S	.wr
+	ENDC
 .rio:	AND.W	#$1FFF,D0
 	LEA	BlkByte,A4
 	BSR	ReadIOtia		; (the value into (A4))
@@ -2670,9 +2705,20 @@ BlkGo:	MOVEQ	#0,D3
 	LSR.W	#5,D1
 	CMP.B	#$FF,TabMap(A3,D1.W)
 	BEQ.S	.wio
+	IFEQ	NO_ARCADE
+	TST.B	ArcSlot(A3,D1.W)
+	BMI.S	.warc
+	ENDC
 	MOVE.L	PagWrite(A3,D1.W*4),A4
 	MOVE.B	BlkByte,(A4,D0.L)
 	BRA.S	.adv
+	IFEQ	NO_ARCADE
+.warc:	MOVEQ	#3,D0
+	AND.B	TabMap(A3,D1.W),D0
+	MOVE.B	BlkByte,D1
+	JSR	ArcPut
+	BRA.S	.adv
+	ENDC
 .wio:	AND.W	#$1FFF,D0
 	LEA	IOAM,A4
 	ADD.L	D0,A4

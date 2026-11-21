@@ -105,6 +105,9 @@ NO_NTSCTOP=0
 	IFND	NO_BUILDINFO	; 1 = Juan's window title without the build date and commit
 NO_BUILDINFO=0
 	ENDC
+	IFND	BUILDNUM	; build number in the window title, "v2.3 build 455" (build.sh passes the commit count); 0 = no number (2.3)
+BUILDNUM=0
+	ENDC
 	IFND	NO_PALDEF	; 1 = Juan's default screen PAL (games at 5/6 speed); 0 = NTSC, the PC Engine's own 60 Hz
 NO_PALDEF=0
 	ENDC
@@ -343,6 +346,17 @@ NO_SATLAG=0
 	IFND	PSGFAIR		; 0 = the 2.2 voice picker; 1 = a new note (key-on, a pitch change over 1/16, 8 volume steps louder) gets a voice bonus of 24 falling by 3 a frame, at most twice its volume
 PSGFAIR=1
 	ENDC
+	IFND	NO_TAP		; 1 = one pad: both Amiga ports are read as player 1 (2.3); 0 = with a pad picked on both ports, a multitap (TurboTap) with port 2 as player 1 and port 1 as player 2, as Mesen 2's PceTurboTap
+NO_TAP=0
+	ENDC
+	IFND	NO_PSGOVER	; 1 = with five or six channels sounding, the quietest go silent (2.3); 0 = the loudest three keep their voice and the rest are summed in software onto the fourth voice (a seventh sample stream), so nothing goes missing
+NO_PSGOVER=0
+	ENDC
+	IFEQ	NO_PSGOVER
+PSGNSTR=7		; sample streams: six DDA channels and the shared voice
+	ELSE
+PSGNSTR=6
+	ENDC
 	IFND	NO_PSGSTICK	; 1 = a channel that has a Paula voice keeps it with a bonus of 6 (Paula volume units); 0 = 20, so channels change speaker less often
 NO_PSGSTICK=0
 	ENDC
@@ -430,6 +444,9 @@ NO_OCSRTG=0
 	IFND	NO_CD		; 1 = no CD-ROM unit; 0 = CD.asm: a .cue (Insert, command line) loads the disc's data tracks into RAM and runs it on the System Card (syscard3.pce or cd_bios.rom), ADPCM and CD audio silent
 NO_CD=0
 	ENDC
+	IFND	NO_ARCADE	; 1 = no Arcade Card (2.3); 0 = CD games get an Arcade Card: 2 MB, four ports through banks $40-$43 and $1A00-$1A7F, the $1AE0 shift register, ID at $1AFE (needs NO_CD=0)
+NO_ARCADE=0
+	ENDC
 	IFND	NO_CD32KIT	; 1 = the 2.1 CD32 pad read (one way) and four pad types; 0 = the CD32 kit's reader (CD32Read.asm): "CD32 Joypad" with pin 6 idling high, and a fifth type for each port, "KTRL CD32+" (the low clock)
 NO_CD32KIT=0
 	ENDC
@@ -460,6 +477,12 @@ NO_REL22=0
 	ENDC
 	IFND	NO_REL23	; 1 = 2.2 version texts
 NO_REL23=0
+	ENDC
+	IFND	NO_PADORD	; 1 = port 1 always read first (2.4 RC1)
+NO_PADORD=0
+	ENDC
+	IFND	NO_REL24	; 1 = 2.3 version texts
+NO_REL24=0
 	ENDC
 	IFND	NO_AGAPAL	; 1 = the colour program's AGA screen always NTSC, the Screen gadget ghosted (2.0-2.2); 0 = Screen works on AGA too (PAL: 5/6 speed)
 NO_AGAPAL=0
@@ -657,7 +680,11 @@ NF_Menu:
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
+	IFEQ	NO_REL24
+	DC.B	"$VER:AmiPC-Engine Emulator v2.4 (21.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.3 (18.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.2 (17.11.26)",0,0
 	ENDC
@@ -1637,6 +1664,13 @@ AutoWriteResult:
 	MOVE.L	#AutoText,D2
 	MOVE.L	#AutoTextEnd-AutoText,D3
 	JSR	-48(A6)			; Write
+	IFNE	LOG_VIA_BUFFER
+	MOVE.L	D4,D1			; the log buffer after the result
+	MOVE.L	#LogBufIni,D2
+	MOVE.L	LogIndex,D3
+	SUB.L	D2,D3
+	JSR	-48(A6)			; Write
+	ENDC
 	IFNE	DdaStat
 	MOVE.L	D4,D1
 	MOVE.L	#DdaStatTxt,D2
@@ -3861,8 +3895,51 @@ LeeCD32Joypad:
 LeePads:
 	LEA	Regs,A3
 	MOVEQ	#0,D3
+	IFEQ	NO_PADORD
+; A CD32 pad on port 2 is read first: a plain read of port 1 just before its CD32 read
+; left a KTRL CD32+ answering as a plain joystick (A1200, 21 Nov 2026).
+	MOVE.L	PadRut2,D0
+	CMP.L	#PadCD2,D0
+	BEQ.S	.p2first
+	IFEQ	NO_CD32KIT
+	CMP.L	#PadKL2,D0
+	BEQ.S	.p2first
+	ENDC
+	BRA.S	.p1first
+.p2first:
+	MOVE.L	D0,A0
+	JSR	(A0)
+	MOVE.B	D3,JoyX(A3)		; port 2 = player 1
+	IFEQ	NO_TAP
+	SF	TapOn
+	ENDC
+	CMP.L	#PadNone,PadRut1
+	BEQ.S	.p2x
+	MOVEQ	#0,D3
 	MOVE.L	PadRut1,A0
 	JSR	(A0)
+	IFEQ	NO_TAP
+	ST	TapOn			; a pad on each port: the tap, port 1 is player 2
+	MOVE.B	D3,TapJoy2
+	ELSE
+	OR.B	D3,JoyX(A3)
+	ENDC
+.p2x:	RTS
+.p1first:
+	ENDC
+	MOVE.L	PadRut1,A0
+	JSR	(A0)
+	IFEQ	NO_TAP
+	SF	TapOn
+	CMP.L	#PadNone,PadRut2
+	BEQ.S	.single
+	CMP.L	#PadNone,PadRut1
+	BEQ.S	.single
+	ST	TapOn			; a pad on each port: the tap, port 1 is player 2
+	MOVE.B	D3,TapJoy2
+	MOVEQ	#0,D3
+.single:
+	ENDC
 	MOVE.L	PadRut2,A0
 	JSR	(A0)
 	MOVE.B	D3,JoyX(A3)
@@ -4937,8 +5014,8 @@ PSGChip:	DS.B	6*64		; per PSG channel: the wave as 32, 16, 8, 4, 2 signed bytes
 PSGNoise:	DS.B	8192+1024	; random +-120 bytes (PSGMakeNoise); played from a new offset each vblank
 	ENDC
 	IFEQ	NO_PSGDDA
-PSGDdaRing:	DS.B	6*8*264		; per channel 8 queued buffers of DDA samples, one per scanline
-PSGDdaHoldBuf:	DS.B	6*264		; per channel: its last DDA level, played when the queue is empty
+PSGDdaRing:	DS.B	PSGNSTR*8*264	; per channel 8 queued buffers of DDA samples, one per scanline
+PSGDdaHoldBuf:	DS.B	PSGNSTR*264	; per channel: its last DDA level, played when the queue is empty
 	ENDC
 	ENDC
 	MemGuard GrafB

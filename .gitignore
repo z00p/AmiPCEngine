@@ -1,10 +1,15 @@
 build/
+roms/
+run/
 release/stage/
 release/drawer/
 release/*.lha
 *.pce
 __pycache__/
+winuae/wb/
 src/embed.i
 src/autopress.i
 src/embed2.i
 src/buildinfo.i
+winuae/wbrtg/
+roms

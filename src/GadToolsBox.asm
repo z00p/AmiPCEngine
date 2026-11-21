@@ -860,6 +860,23 @@ MainMenuSC:
     DC.L    $80000093,1			; En MainMenuWIN
     DC.L    $00000000
 
+; " build 455" from BUILDNUM (nothing when 0)
+BuildNo	MACRO
+	IFNE	BUILDNUM
+	DC.B	' build '
+	IFGE	BUILDNUM-1000
+	DC.B	48+BUILDNUM/1000
+	ENDC
+	IFGE	BUILDNUM-100
+	DC.B	48+BUILDNUM/100-(BUILDNUM/1000)*10
+	ENDC
+	IFGE	BUILDNUM-10
+	DC.B	48+BUILDNUM/10-(BUILDNUM/100)*10
+	ENDC
+	DC.B	48+BUILDNUM-(BUILDNUM/10)*10
+	ENDC
+	ENDM
+
 MainMenuWTitle:
 	IFEQ	NO_BUILDINFO
 	INCLUDE	"buildinfo.i"		; written by build.sh / build_embed.sh: date and commit
@@ -874,7 +891,13 @@ MainMenuWTitle:
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
-    DC.B    'AmiPC-Engine Emulator v2.3  (Debug rows)',0
+	IFEQ	NO_REL24
+    DC.B    'AmiPC-Engine Emulator v2.4'
+	ELSE
+    DC.B    'AmiPC-Engine Emulator v2.3'
+	ENDC
+	BuildNo
+    DC.B    '  (Debug rows)',0
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.2  (Debug rows)',0
 	ENDC
@@ -904,7 +927,13 @@ MainMenuWTitle:
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
-    DC.B    'AmiPC-Engine Emulator v2.3',0
+	IFEQ	NO_REL24
+    DC.B    'AmiPC-Engine Emulator v2.4'
+	ELSE
+    DC.B    'AmiPC-Engine Emulator v2.3'
+	ENDC
+	BuildNo
+	DC.B	0
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.2',0
 	ENDC
@@ -1989,7 +2018,11 @@ AboutIText0:
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
+	IFEQ	NO_REL24
+    DC.B    'AmiPC-Engine Emulator v2.4',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.3',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.2',0
 	ENDC
@@ -2020,7 +2053,11 @@ AboutIText1:
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
+	IFEQ	NO_REL24
+    DC.B    '(21 November 2026)',0
+	ELSE
     DC.B    '(18 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(17 November 2026)',0
 	ENDC
@@ -2051,7 +2088,11 @@ AboutITextZ:
 	IFEQ	NO_REL21
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
+	IFEQ	NO_REL24
+    DC.B    'Version 2.4: z00p',0
+	ELSE
     DC.B    'Version 2.3: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 2.2: z00p',0
 	ENDC

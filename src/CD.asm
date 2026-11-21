@@ -73,6 +73,15 @@ CD_MAXFILE=99
 ; Registers. D0 = offset in the I/O page ($1800-$1FFF), A4 = its byte in IOAM.
 
 CdReadIO:
+	IFEQ	NO_ARCADE
+	TST.B	ArcOn
+	BEQ.S	.na
+	CMP.W	#$1A00,D0
+	BCS.S	.na
+	CMP.W	#$1B00,D0
+	BCS	ArcReadIO
+.na:
+	ENDC
 	CMP.W	#$1C00,D0
 	BCC.S	.ff
 	MOVEM.L	D0-D4/A0-A1,-(SP)
@@ -109,6 +118,15 @@ CdRdTab:	DC.W	CdR00-CdRdTab,CdR01-CdRdTab,CdR02-CdRdTab,CdR03-CdRdTab
 	DC.W	CdR0C-CdRdTab,CdR0D-CdRdTab,CdR0E-CdRdTab,CdR0F-CdRdTab
 
 CdWriteIO:
+	IFEQ	NO_ARCADE
+	TST.B	ArcOn
+	BEQ.S	.na
+	CMP.W	#$1A00,D0
+	BCS.S	.na
+	CMP.W	#$1B00,D0
+	BCS	ArcWriteIO
+.na:
+	ENDC
 	CMP.W	#$1C00,D0
 	BCC.S	.x
 	MOVEM.L	D0-D4/A0-A1,-(SP)
@@ -128,6 +146,311 @@ CdWrTab:	DC.W	CdW00-CdWrTab,CdW01-CdWrTab,CdW02-CdWrTab,CdWNo-CdWrTab
 	DC.W	CdW04-CdWrTab,CdW05-CdWrTab,CdWNo-CdWrTab,CdW07-CdWrTab
 	DC.W	CdW08-CdWrTab,CdW09-CdWrTab,CdW0A-CdWrTab,CdW0B-CdWrTab
 	DC.W	CdWNo-CdWrTab,CdW0D-CdWrTab,CdW0E-CdWrTab,CdW0F-CdWrTab
+
+	IFEQ	NO_ARCADE
+; -------------------------------------------------------------------
+; The Arcade Card. 2 MB (ArcRam) and four ports, each a 24-bit base, a 16-bit offset and
+; increment and a control byte: b0 auto-increment, b1 the offset added to the address,
+; b3 the offset signed ($FF0000 added), b4 the increment to the base (else to the offset),
+; b5-6 when the offset is added to the base: 1 = a write of reg 5, 2 = of reg 6, 3 = of reg A.
+; A port's data: banks $40-$43 (any address) or its registers 0 and 1 ($1A00 + port*$10).
+; $1AE0-$1AE3 a 32-bit value (low byte first), $1AE4 shifts it, $1AE5 rotates it,
+; $1AFE / $1AFF the ID ($10, $51).
+ARC_SIZE=$200000
+AP_BASE=0
+AP_OFF=4
+AP_INC=6
+AP_CTRL=8
+
+; The CPU's trap (CheckReadIO / CheckWriteIO): D1.W = slot, A4 = its byte in ArcWin. D0/D1 kept, as
+; ReadIO / CdReadIO keep them: the CPU core builds the next address in D1.L (its upper word 0).
+ArcRead:
+	MOVEM.L	D0-D1,-(SP)
+	MOVEQ	#3,D0
+	AND.B	TabMap(A3,D1.W),D0
+	IFNE	CdLog
+	MOVE.W	D0,ArcLogOff
+	ENDC
+	BSR	ArcGet
+	MOVE.B	D1,(A4)
+	IFNE	CdLog
+	MOVE.W	ArcLogOff,D0
+	OR.W	#$0400,D0
+	BSR	ArcLog
+	ENDC
+	MOVEM.L	(SP)+,D0-D1
+	RTS
+ArcWrite:
+	MOVEM.L	D0-D1,-(SP)
+	MOVEQ	#3,D0
+	AND.B	TabMap(A3,D1.W),D0
+	MOVE.B	(A4),D1
+	IFNE	CdLog
+	MOVEM.L	D0-D1,-(SP)
+	OR.W	#$8400,D0
+	BSR	ArcLog
+	MOVEM.L	(SP)+,D0-D1
+	ENDC
+	BSR	ArcPut
+	MOVEM.L	(SP)+,D0-D1
+	RTS
+
+; D0.W = port 0-3: D1.B = its byte, then the auto-increment. D0/D1 trashed.
+ArcGet:	MOVEM.L	D2/A0-A1,-(SP)
+	BSR.S	ArcAddr
+	MOVE.L	ArcRam,A1
+	MOVE.B	(A1,D2.L),D1
+	BSR.S	ArcInc
+	MOVEM.L	(SP)+,D2/A0-A1
+	RTS
+; D0.W = port 0-3, D1.B = the byte: into its address, then the auto-increment. D0 trashed.
+ArcPut:	MOVEM.L	D2/A0-A1,-(SP)
+	BSR.S	ArcAddr
+	MOVE.L	ArcRam,A1
+	MOVE.B	D1,(A1,D2.L)
+	BSR.S	ArcInc
+	MOVEM.L	(SP)+,D2/A0-A1
+	RTS
+
+; D0.W = port: A0 = its registers, D2.L = its address in ArcRam. D0 trashed.
+ArcAddr:
+	LSL.W	#4,D0
+	LEA	ArcPorts,A0
+	ADD.W	D0,A0
+	MOVE.L	AP_BASE(A0),D2
+	BTST	#1,AP_CTRL(A0)
+	BEQ.S	.n
+	MOVEQ	#0,D0
+	MOVE.W	AP_OFF(A0),D0
+	ADD.L	D0,D2
+	BTST	#3,AP_CTRL(A0)
+	BEQ.S	.n
+	ADD.L	#$FF0000,D2
+.n:	AND.L	#ARC_SIZE-1,D2
+	RTS
+
+; A0 = port: the auto-increment. D0 trashed.
+ArcInc:	BTST	#0,AP_CTRL(A0)
+	BEQ.S	.x
+	MOVEQ	#0,D0
+	MOVE.W	AP_INC(A0),D0
+	BTST	#4,AP_CTRL(A0)
+	BEQ.S	.o
+	ADD.L	AP_BASE(A0),D0
+	AND.L	#$FFFFFF,D0
+	MOVE.L	D0,AP_BASE(A0)
+	RTS
+.o:	ADD.W	D0,AP_OFF(A0)
+.x:	RTS
+
+; A0 = port: base = base + offset (+ $FF0000 signed). D0 trashed.
+ArcAdd:	MOVEQ	#0,D0
+	MOVE.W	AP_OFF(A0),D0
+	ADD.L	AP_BASE(A0),D0
+	BTST	#3,AP_CTRL(A0)
+	BEQ.S	.n
+	ADD.L	#$FF0000,D0
+.n:	AND.L	#$FFFFFF,D0
+	MOVE.L	D0,AP_BASE(A0)
+	RTS
+
+; $1A00-$1AFF from CdReadIO: D0.W = the offset, A4 = its byte in IOAM. Registers kept.
+ArcReadIO:
+	MOVEM.L	D0-D2/A0-A1,-(SP)
+	IFNE	CdLog
+	MOVE.W	D0,ArcLogOff
+	ENDC
+	MOVEQ	#-1,D1
+	BTST	#7,D0
+	BNE.S	.hi
+	MOVE.W	D0,D2
+	AND.W	#$0F,D2			; the register
+	LSR.W	#4,D0
+	AND.W	#3,D0			; the port
+	CMP.W	#2,D2
+	BCC.S	.reg
+	BSR	ArcGet
+	BRA.S	.out
+.reg:	LSL.W	#4,D0
+	LEA	ArcPorts,A0
+	ADD.W	D0,A0
+	CMP.W	#$A,D2
+	BHI.S	.out			; $B-$F: $FF
+	BEQ.S	.zero
+	LEA	ArcRdMap-2,A1
+	MOVE.B	(A1,D2.W),D2
+	MOVE.B	(A0,D2.W),D1
+	BRA.S	.out
+.zero:	MOVEQ	#0,D1
+	BRA.S	.out
+.hi:	SUB.W	#$1AE0,D0
+	BCS.S	.out
+	CMP.W	#4,D0
+	BCS.S	.val
+	CMP.W	#6,D0
+	BCS.S	.lat
+	MOVEQ	#$10,D1
+	CMP.W	#$1E,D0
+	BEQ.S	.out
+	MOVEQ	#$51,D1
+	CMP.W	#$1F,D0
+	BEQ.S	.out
+	MOVEQ	#-1,D1
+	BRA.S	.out
+.val:	LEA	ArcVal+3,A0
+	SUB.W	D0,A0
+	MOVE.B	(A0),D1
+	BRA.S	.out
+.lat:	LEA	ArcLatch-4,A0
+	MOVE.B	(A0,D0.W),D1
+.out:	MOVE.B	D1,(A4)
+	IFNE	CdLog
+	MOVE.W	ArcLogOff,D0
+	BSR	ArcLog
+	ENDC
+	MOVEM.L	(SP)+,D0-D2/A0-A1
+	RTS
+
+; $1A00-$1AFF from CdWriteIO: D0.W = the offset, (A4) = the byte. Registers kept.
+ArcWriteIO:
+	MOVEM.L	D0-D2/A0-A1,-(SP)
+	IFNE	CdLog
+	MOVE.W	D0,ArcLogOff
+	ENDC
+	MOVE.B	(A4),D1
+	BTST	#7,D0
+	BNE.S	.hi
+	MOVE.W	D0,D2
+	AND.W	#$0F,D2
+	LSR.W	#4,D0
+	AND.W	#3,D0
+	CMP.W	#2,D2
+	BCC.S	.reg
+	BSR	ArcPut
+	BRA	.out
+.reg:	LSL.W	#4,D0
+	LEA	ArcPorts,A0
+	ADD.W	D0,A0
+	CMP.W	#$A,D2
+	BHI	.out
+	BEQ.S	.tr3
+	CMP.W	#9,D2
+	BEQ.S	.ctl
+	LEA	ArcRdMap-2,A1
+	MOVE.B	(A1,D2.W),D0		; D0.W = the byte in the port's registers
+	MOVE.B	D1,(A0,D0.W)
+	CMP.W	#5,D2
+	BEQ.S	.tr1
+	CMP.W	#6,D2
+	BNE	.out
+	MOVEQ	#2,D0
+	BRA.S	.trig
+.tr1:	MOVEQ	#1,D0
+	BRA.S	.trig
+.tr3:	MOVEQ	#3,D0
+.trig:	MOVE.B	AP_CTRL(A0),D2
+	LSR.B	#5,D2
+	AND.B	#3,D2
+	CMP.B	D0,D2
+	BNE.S	.out
+	BSR	ArcAdd
+	BRA.S	.out
+.ctl:	AND.B	#$7F,D1
+	MOVE.B	D1,AP_CTRL(A0)
+	BRA.S	.out
+.hi:	SUB.W	#$1AE0,D0
+	BCS.S	.out
+	CMP.W	#4,D0
+	BCC.S	.sh
+	LEA	ArcVal+3,A0
+	SUB.W	D0,A0
+	MOVE.B	D1,(A0)
+	BRA.S	.out
+.sh:	CMP.W	#6,D0
+	BCC.S	.out
+	LEA	ArcLatch-4,A0
+	MOVE.B	D1,(A0,D0.W)
+	MOVE.L	ArcVal,D2
+	AND.W	#$0F,D1
+	BEQ.S	.out
+	BCLR	#3,D1
+	BNE.S	.right
+	CMP.W	#4,D0
+	BEQ.S	.sl
+	ROL.L	D1,D2
+	BRA.S	.st
+.sl:	LSL.L	D1,D2
+	BRA.S	.st
+.right:	NEG.W	D1			; 8..F: right by 8 - (v & 7)
+	ADDQ.W	#8,D1
+	CMP.W	#4,D0
+	BEQ.S	.sr
+	ROR.L	D1,D2
+	BRA.S	.st
+.sr:	LSR.L	D1,D2
+.st:	MOVE.L	D2,ArcVal
+.out:
+	IFNE	CdLog
+	MOVE.W	ArcLogOff,D0
+	OR.W	#$8000,D0
+	MOVE.B	(A4),D1
+	BSR	ArcLog
+	ENDC
+	MOVEM.L	(SP)+,D0-D2/A0-A1
+	RTS
+
+	IFNE	CdLog
+; D0.W = what ($1Axx register read, $9Axx write, $040p port p bank read, $840p write), D1.B = the byte.
+ArcLog:	MOVEM.L	D0-D7/A0-A6,-(SP)
+	TST.W	ArcLogN
+	BEQ	ArcLogX
+	SUBQ.W	#1,ArcLogN
+	MOVE.W	D0,D4
+	MOVE.B	D1,D5
+	MOVE.L	A5,D2
+	SUB.W	(A2),D2
+	LogString "A "
+	LogHexWord D2
+	LogString " "
+	LogHexWord D4
+	LogString "="
+	LogHexByte D5
+	LogEnter
+ArcLogX:	MOVEM.L	(SP)+,D0-D7/A0-A6
+	RTS
+ArcLogN:	DC.W	15000
+ArcPcSample:			; every 4000 lines: the PC and the MPRs
+	SUBQ.W	#1,ArcPcN
+	BNE	ArcPcR
+	MOVE.W	#500,ArcPcN
+	MOVEM.L	D0-D7/A0-A6,-(SP)
+	MOVE.L	A5,D2
+	SUB.W	(A2),D2
+	LogString "S "
+	LogHexWord D2
+	LogString " M:"
+	LEA	Regs+TabMap,A2
+	MOVEQ	#7,D3
+ArcPcL:	MOVE.B	(A2)+,D0
+	LogHexByte D0
+	DBF	D3,ArcPcL
+	LogString " T:"
+	LogHexLong Regs+ArcSlot
+	LogHexLong Regs+ArcSlot+4
+	LogEnter
+	MOVEM.L	(SP)+,D0-D7/A0-A6
+ArcPcR:	RTS
+ArcPcN:	DC.W	500
+ArcLogOff:	DC.W	0
+	ENDC
+ArcRam:		DC.L	0		; the card's 2 MB (AllocMem with the disc), 0 = no card
+ArcVal:		DC.L	0
+ArcPorts:	DS.B	4*16
+ArcLatch:	DS.B	2		; the last $1AE4 / $1AE5 writes
+ArcOn:		DC.B	0		; the card is in (a disc running, its RAM allocated)
+ArcRdMap:	DC.B	3,2,1,5,4,7,6,8	; registers 2-9: the byte in the port's registers
+	EVEN
+	ENDC
 
 ; Reads: the value in D0.B.
 CdR00:	MOVE.B	ScSig,D0		; BSY REQ MSG C/D I/O
@@ -1863,6 +2186,15 @@ CdLoadAll:
 	JSR	-$C6(A6)		; AllocMem
 	MOVE.L	D0,CdMem
 	BEQ	.mem
+	IFEQ	NO_ARCADE
+	TST.L	ArcRam			; the Arcade Card's RAM, before the CD audio takes what's left
+	BNE.S	.arc
+	MOVE.L	#ARC_SIZE,D0
+	MOVEQ	#1,D1			; MEMF_PUBLIC (0: no card)
+	JSR	-$C6(A6)		; AllocMem
+	MOVE.L	D0,ArcRam
+.arc:
+	ENDC
 	MOVE.L	#CdChunk,CdLBuf		; the read buffer: big reads (each one over a network costs)
 	MOVE.L	#CdChunkSecs,CdLSecs
 	MOVE.L	#CD_BIGSECS*2352,D0
@@ -2224,6 +2556,9 @@ CdLine:
 	TST.B	CdOn
 	BEQ.S	.x
 	MOVEM.L	D0-D4/A0-A1,-(SP)
+	IFNE	CdLog
+	BSR	ArcPcSample
+	ENDC
 	MOVE.L	ScUpdCnt,D0
 	BEQ.S	.nu
 	SUB.L	#CD_MCLINE,D0
@@ -2246,6 +2581,9 @@ CdLine:
 
 ; Power ON with a disc in (PCE_SetCardtridge): the CD banks, the unit reset.
 CdPowerOn:
+	IFEQ	NO_ARCADE
+	SF	ArcOn
+	ENDC
 	TST.B	CdOn
 	BEQ	.x
 	MOVEM.L	D0-D7/A0-A3,-(SP)
@@ -2264,6 +2602,33 @@ CdPowerOn:
 	MOVE.L	A0,(A1)+
 	ADD.L	#$2000,A0
 	DBF	D0,.s
+	IFEQ	NO_ARCADE
+	MOVE.L	ArcRam,D0		; the Arcade Card: banks $40-$43 through ArcWin, its RAM and registers cleared
+	BEQ.S	.na
+	LEA	ArcWin,A0
+	LEA	DirMappers+($40*8),A1
+	MOVEQ	#4-1,D0
+.am:	MOVE.L	A0,(A1)+
+	MOVE.L	A0,(A1)+
+	DBF	D0,.am
+	MOVE.L	ArcRam,A0
+	MOVEQ	#0,D1
+	MOVE.L	#ARC_SIZE/16-1,D0
+.ac:	MOVE.L	D1,(A0)+
+	MOVE.L	D1,(A0)+
+	MOVE.L	D1,(A0)+
+	MOVE.L	D1,(A0)+
+	SUBQ.L	#1,D0
+	BPL.S	.ac
+	LEA	ArcVal,A0
+	MOVEQ	#4+4*16+2-1,D0
+.ap:	CLR.B	(A0)+
+	DBF	D0,.ap
+	IFND	ArcNoOn
+	ST	ArcOn
+	ENDC
+.na:
+	ENDC
 	LEA	CdOpenBus,A0
 	MOVEQ	#-1,D1
 	MOVE.W	#$2000/4-1,D0
@@ -2300,6 +2665,17 @@ CdPowerOn:
 
 ; Free the disc in RAM.
 CdFree:	MOVEM.L	D0-D1/A0-A1/A6,-(SP)
+	IFEQ	NO_ARCADE
+	SF	ArcOn
+	MOVE.L	ArcRam,D0
+	BEQ.S	.na
+	MOVE.L	D0,A1
+	MOVE.L	#ARC_SIZE,D0
+	MOVE.L	4.W,A6
+	JSR	-$D2(A6)		; FreeMem
+	CLR.L	ArcRam
+.na:
+	ENDC
 	MOVE.L	CdMem,D0
 	BEQ.S	.x
 	MOVE.L	D0,A1
@@ -2853,6 +3229,15 @@ CdLoadData:
 	JSR	-$C6(A6)		; AllocMem
 	MOVE.L	D0,CdMem
 	BEQ	.mem
+	IFEQ	NO_ARCADE
+	TST.L	ArcRam			; the Arcade Card's RAM, before the CD audio takes what's left
+	BNE.S	.arc
+	MOVE.L	#ARC_SIZE,D0
+	MOVEQ	#1,D1			; MEMF_PUBLIC (0: no card)
+	JSR	-$C6(A6)		; AllocMem
+	MOVE.L	D0,ArcRam
+.arc:
+	ENDC
 	LEA	CdTrk,A3
 	MOVE.W	CdTracks,D5
 	SUBQ.W	#1,D5

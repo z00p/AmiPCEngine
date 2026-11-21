@@ -463,6 +463,7 @@ MaskVROM = $1C
 ScanLine = $1E
 
 TabMap = $20
+ArcSlot = $58		; 8 bytes, a slot each: 1 = slot 0 (the I/O page check), $80 = an Arcade Card bank, else 0
 
 Cycles = $0;
 
@@ -572,6 +573,10 @@ Regs:
 	DC.B	0	;  $51(A3)	BFF
 	DC.B	0	;  $52(A3)	DFF
 	DC.B	0	;  $53(A3)	IFF
+	IFEQ	NO_ARCADE
+	DS.B	4	;  $54(A3)
+	DC.B	1,0,0,0,0,0,0,0	;  $58(A3)	ArcSlot
+	ENDC
 
 
 FRegs:	DS.B	$400-(FRegs-Regs)

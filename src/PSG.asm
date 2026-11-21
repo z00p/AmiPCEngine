@@ -271,6 +271,13 @@ PSGUpdate:
 	TST.B	D6
 	ENDC
 	BMI.S	.free
+	IFEQ	NO_PSGOVER
+	CMP.B	#6,D6
+	BNE.S	.own
+	BSR	PSGVoiceShared		; the channels beyond three, summed
+	BRA.S	.next
+.own:
+	ENDC
 	BSR	PSGVoiceTone
 	BRA.S	.next
 .free:	MOVE.W	D7,D0
@@ -319,6 +326,10 @@ PSGAllocate:
 .bonus:	MOVEQ	#0,D1
 	MOVE.B	(PSGVoiceOwner.L,D0.W),D1
 	BMI.S	.nob
+	IFEQ	NO_PSGOVER
+	CMP.B	#6,D1
+	BEQ.S	.nob			; the shared voice
+	ENDC
 	TST.W	(PSGScore.L,D1.W*2)
 	BEQ.S	.nob
 	IFEQ	NO_PSGSTICK
@@ -327,6 +338,19 @@ PSGAllocate:
 	ADDQ.W	#6,(PSGScore.L,D1.W*2)
 	ENDC
 .nob:	DBF	D0,.bonus
+	IFEQ	NO_PSGOVER
+	MOVEQ	#0,D5			; channels with a score
+	MOVEQ	#6-1,D0
+.cnt:	TST.W	(PSGScore.L,D0.W*2)
+	BEQ.S	.cnt0
+	ADDQ.W	#1,D5
+.cnt0:	DBF	D0,.cnt
+	MOVEQ	#4,D0
+	CMP.W	#4,D5
+	BLS.S	.lim
+	MOVEQ	#3,D0			; five or six: three direct, the rest shared
+.lim:	MOVE.W	D0,PSGOvLim
+	ENDC
 	MOVEQ	#0,D6			; rank: channels ahead of this one
 .rank:	MOVE.W	(PSGScore.L,D6.W*2),D1
 	SF	(PSGPick.L,D6.W)
@@ -344,15 +368,46 @@ PSGAllocate:
 .notah:	ADDQ.W	#1,D3
 	CMP.W	#6,D3
 	BNE.S	.cmp
+	IFEQ	NO_PSGOVER
+	CMP.W	PSGOvLim,D2
+	ELSE
 	CMP.W	#4,D2
+	ENDC
 	SCS	(PSGPick.L,D6.W)
 .nextr:	ADDQ.W	#1,D6
 	CMP.W	#6,D6
 	BNE.S	.rank
+	IFEQ	NO_PSGOVER
+	CLR.B	PSGOvN
+	MOVEQ	#0,D6
+.shr:	SF	(PSGShare.L,D6.W)
+	CMP.W	#3,PSGOvLim
+	BNE.S	.shn
+	TST.W	(PSGScore.L,D6.W*2)
+	BEQ.S	.shn
+	TST.B	(PSGPick.L,D6.W)
+	BNE.S	.shn
+	BTST	#6,(PSGBuffer+4.L,D6.W*8)
+	BNE.S	.shn			; a DDA stream can't be summed here
+	ST	(PSGShare.L,D6.W)
+	ADDQ.B	#1,PSGOvN
+.shn:	ADDQ.W	#1,D6
+	CMP.W	#6,D6
+	BNE.S	.shr
+	ENDC
 	MOVEQ	#3,D0			; voices whose channel lost its place are freed
 .drop:	MOVEQ	#0,D1
 	MOVE.B	(PSGVoiceOwner.L,D0.W),D1
 	BMI.S	.nod
+	IFEQ	NO_PSGOVER
+	CMP.B	#6,D1
+	BNE.S	.real
+	TST.B	PSGOvN
+	BNE.S	.nod			; still sharing: it keeps its voice
+	ST	(PSGVoiceOwner.L,D0.W)
+	BRA.S	.nod
+.real:
+	ENDC
 	TST.B	(PSGPick.L,D1.W)
 	BNE.S	.keep
 	ST	(PSGVoiceOwner.L,D0.W)
@@ -379,6 +434,39 @@ PSGAllocate:
 .nextp:	ADDQ.W	#1,D6
 	CMP.W	#6,D6
 	BNE.S	.place
+	IFEQ	NO_PSGOVER
+	TST.B	PSGOvN
+	BEQ.S	.ovx
+	MOVEQ	#3,D0
+.ovh:	CMP.B	#6,(PSGVoiceOwner.L,D0.W)
+	BEQ.S	.ovx			; it has one
+	DBF	D0,.ovh
+	MOVEQ	#0,D0			; the side the shared channels lean to
+	MOVEQ	#0,D6
+.ovs:	TST.B	(PSGShare.L,D6.W)
+	BEQ.S	.ovs2
+	MOVE.B	(PSGPan.L,D6.W),D1
+	EXT.W	D1
+	ADD.W	D1,D0
+.ovs2:	ADDQ.W	#1,D6
+	CMP.W	#6,D6
+	BNE.S	.ovs
+	LEA	PSGSideC(PC),A0
+	TST.W	D0
+	BEQ.S	.ovt
+	LEA	PSGSideL(PC),A0
+	BMI.S	.ovt
+	LEA	PSGSideR(PC),A0
+.ovt:	MOVEQ	#4-1,D2
+.ovv:	MOVEQ	#0,D1
+	MOVE.B	(A0)+,D1
+	TST.B	(PSGVoiceOwner.L,D1.W)
+	BPL.S	.ovu
+	MOVE.B	#6,(PSGVoiceOwner.L,D1.W)
+	BRA.S	.ovx
+.ovu:	DBF	D2,.ovv
+.ovx:
+	ENDC
 	RTS
 
 	IFEQ	NO_PSGBASS
@@ -530,6 +618,14 @@ PSGNoteAge:	DS.B	6
 	ENDC
 PSGPan:		DS.B	6
 PSGPick:	DS.B	6
+	IFEQ	NO_PSGOVER
+PSGShare:	DS.B	6		; summed on the shared voice this frame
+PSGOvN:		DS.B	1		; how many
+	EVEN
+PSGOvLim:	DC.W	4		; channels with their own voice: 4, or 3 when sharing
+PSGShPh:	DS.L	6		; wave or noise position per channel, 16.16
+PSGShAcc:	DS.W	264		; the sum, before it becomes bytes
+	ENDC
 	EVEN
 	ENDC
 
@@ -988,6 +1084,136 @@ PSGVoiceDda:
 	MOVE.W	D0,$9A(A6)
 .on:	RTS
 
+	IFEQ	NO_PSGOVER
+; The shared voice (owner 6, D7 = voice, A6 = $DFF000): each vblank the shared
+; channels' waves (or noise) at their Paula volumes are summed into one buffer
+; of 264 samples, one per scanline as a DDA buffer, and queued as stream 6;
+; PSGVoiceDda and PSGAudInt then play it like a DDA channel at volume 64.
+; Steps per sample: PSGDdaPer colour clocks over the channel's divider (PSG
+; clock = the NTSC colour clock; on a PAL screen x 1.0092). Uses D0-D6/A0-A4.
+PSGVoiceShared:
+	LEA	$A0(A6),A1
+	MOVE.W	D7,D0
+	LSL.W	#4,D0
+	ADD.W	D0,A1			; A1 = AUDx registers
+	MOVE.B	PSGRingWr+6,D0
+	MOVE.B	D0,D2
+	SUB.B	PSGRingRd+6,D2
+	AND.W	#7,D2			; buffers waiting
+	CMP.W	#6,D2
+	BCC	.start			; full: this frame is dropped
+	MOVEM.L	D0/D2/D7/A1,-(SP)
+	LEA	PSGShAcc,A4
+	MOVE.W	#264/2-1,D1
+.clr:	CLR.L	(A4)+
+	DBF	D1,.clr
+	MOVEQ	#0,D7			; X = steps per sample x the divider, 16.16
+	MOVE.W	PSGDdaPer,D7
+	MOVE.L	D7,D0
+	SWAP	D7
+	CMP.W	#250,D0
+	BCS.S	.ntsc
+	MULU.W	#604,D0			; PAL: x 66140 / 65536
+	ADD.L	D0,D7
+.ntsc:	MOVE.L	D7,PSGShX
+	MOVEQ	#0,D6
+.ch:	TST.B	(PSGShare.L,D6.W)
+	BEQ	.nch
+	LEA	PSGBuffer,A0
+	MOVE.W	D6,D0
+	LSL.W	#3,D0
+	ADD.W	D0,A0
+	BSR	PSGAtten		; D1 = Paula volume (uses D0-D5)
+	TST.W	D1
+	BEQ	.nch
+	MOVE.W	D1,A2			; volume
+	MOVE.L	PSGShX,D7
+	CMP.W	#4,D6
+	BCS.S	.tone
+	TST.B	7(A0)
+	BPL.S	.tone
+	MOVEQ	#$1F,D2			; noise: a step every (31 - NF) x 64 clocks, NF 31: 32
+	AND.B	7(A0),D2
+	EOR.B	#$1F,D2
+	LSL.W	#6,D2
+	BNE.S	.nd
+	MOVEQ	#32,D2
+.nd:	LEA	PSGNoise,A3
+	MOVE.W	#8192-1,D4
+	BRA.S	.div
+.tone:	MOVEQ	#0,D2
+	MOVE.B	3(A0),D2
+	AND.B	#$0F,D2
+	LSL.W	#8,D2
+	MOVE.B	2(A0),D2
+	TST.W	D2
+	BNE.S	.f
+	MOVE.W	#$1000,D2
+.f:	CMP.W	#8,D2
+	BCS	.nch			; above ~14 kHz
+	LEA	PSGChip,A3
+	MOVE.W	D6,D0
+	LSL.W	#6,D0
+	ADD.W	D0,A3			; the full 32-sample wave
+	MOVEQ	#31,D4
+.div:	DIVU.L	D2,D7			; D7 = step per sample
+	MOVE.L	(PSGShPh.L,D6.W*4),D2	; position
+	MOVE.W	A2,D5			; volume
+	LEA	PSGShAcc,A4
+	MOVE.W	#264-1,D1
+.s:	ADD.L	D7,D2
+	MOVE.L	D2,D3
+	SWAP	D3
+	AND.W	D4,D3
+	MOVE.B	(A3,D3.W),D0
+	EXT.W	D0
+	MULS.W	D5,D0
+	ADD.W	D0,(A4)+
+	DBF	D1,.s
+	MOVE.L	D2,(PSGShPh.L,D6.W*4)
+.nch:	ADDQ.W	#1,D6
+	CMP.W	#6,D6
+	BNE	.ch
+	MOVEM.L	(SP)+,D0/D2/D7/A1
+	AND.W	#7,D0			; the ring slot
+	MOVEQ	#6*8,D1
+	ADD.W	D0,D1			; stream 6, slot
+	MOVE.W	#264/2,D3
+	CMP.W	#2,D2
+	BCS.S	.len
+	MOVE.W	#262/2,D3		; 3 or more waiting with this one: shorter, to drain
+.len:	MOVE.W	D3,(PSGRingLen.L,D1.W*2)
+	IFEQ	NO_DDAQUEUE
+	MOVE.W	#64,(PSGRingVol.L,D1.W*2)
+	ENDC
+	IFEQ	NO_DDASTRETCH
+	MOVE.W	PSGDdaPer,(PSGRingPer.L,D1.W*2)
+	ENDC
+	MULU.W	#264,D1
+	LEA	PSGDdaRing,A3
+	ADD.L	D1,A3
+	LEA	PSGShAcc,A4
+	MOVE.W	#264-1,D1
+	MOVEQ	#127,D4
+	MOVE.W	#-128,D5
+.b:	MOVE.W	(A4)+,D3
+	ASR.W	#6,D3
+	CMP.W	D4,D3
+	BLE.S	.b1
+	MOVE.W	D4,D3
+.b1:	CMP.W	D5,D3
+	BGE.S	.b2
+	MOVE.W	D5,D3
+.b2:	MOVE.B	D3,(A3)+
+	DBF	D1,.b
+	ADDQ.B	#1,D0
+	AND.B	#7,D0
+	MOVE.B	D0,PSGRingWr+6		; publish after the buffer is written
+.start:	MOVEQ	#6,D6
+	BRA	PSGVoiceDda		; starts the stream if the voice isn't streaming it yet
+PSGShX:	DC.L	0
+	ENDC
+
 PSGAudBit:	DC.W	$0080,$0100,$0200,$0400
 
 ; Level 4: Paula has started the buffer queued last time on a streaming
@@ -1391,7 +1617,7 @@ PSGDdaTmp:	DS.B	8
 PSGDdaLastCtl:	DS.B	8
 PSGDdaVolNow:	DC.W	0
 PSGDdaSkip:	DC.W	0
-PSGRingVol:	DS.W	6*8		; Paula volume per queued buffer
+PSGRingVol:	DS.W	PSGNSTR*8	; Paula volume per queued buffer
 PSGVoiceNextVol:	DS.W	4	; volume of the buffer each voice starts next
 PSGVoiceCurVol:	DS.W	4
 	ENDC
@@ -1707,9 +1933,9 @@ PSGDdaHoldPl:	DS.B	8		; the level in the hold buffer (what Paula plays on an und
 PSGRingRd:	DS.B	8
 PSGRingWr:	DS.B	8
 PSGPrimed:	DS.B	8
-PSGRingLen:	DS.W	6*8
+PSGRingLen:	DS.W	PSGNSTR*8
 	IFEQ	NO_DDASTRETCH
-PSGRingPer:	DS.W	6*8		; period per queued buffer
+PSGRingPer:	DS.W	PSGNSTR*8	; period per queued buffer
 PSGVoiceNextPer:	DS.W	4		; period of the buffer each voice starts next
 PSGLastVbl:	DC.L	0
 PSGDdaRate:	DC.W	256		; Amiga frames per PCE frame, x256, smoothed

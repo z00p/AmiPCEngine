@@ -3,8 +3,12 @@
 	IFND	LOG_ENABLED	; default, or set with -DLOG_ENABLED=1
 LOG_ENABLED=0
 	ENDC
+	IFND	LOG_VIA_BUFFER
 LOG_VIA_BUFFER=0
+	ENDC
+	IFND	LOG_VIA_SERIAL
 LOG_VIA_SERIAL=1	; 0:Disabled / 1:Enabled
+	ENDC
 
 
 LogString:MACRO
@@ -124,7 +128,7 @@ LogHexLongRut:
 
 	IFNE	LOG_VIA_BUFFER
 	cmp.l	#LogBufEnd,LogIndex
-	bcc.s	logHexEnd
+	bcc	logHexEnd
 	ENDC
 
 	movem.l	d0-d1,-(sp)
@@ -186,7 +190,7 @@ LogHexWordRut:
 
 	IFNE	LOG_VIA_BUFFER
 	cmp.l	#LogBufEnd,LogIndex
-	bcc.s	logHexEnd
+	bcc	logHexEnd
 	ENDC
 
 	movem.l	d0-d1,-(sp)
@@ -227,7 +231,7 @@ LogHexByteRut:
 
 	IFNE	LOG_VIA_BUFFER
 	cmp.l	#LogBufEnd,LogIndex
-	bcc.s	logHexEnd
+	bcc	logHexEnd
 	ENDC
 
 	movem.l	d0-d1,-(sp)

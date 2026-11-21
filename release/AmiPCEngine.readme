@@ -27,6 +27,16 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
+New in 2.4
+----------
+Arcade Card (beta): CD games get an Arcade Card with its 2 MB, so Art
+of Fighting (Ryuuko no Ken), Strider Hiryuu and the other Arcade Card
+games run. Two players: with a pad set on both ports the game sees a
+multitap with two pads (port 2 is player 1, port 1 player 2). Original
+stereo no longer drops notes when five or six channels play: the
+loudest three keep a voice and the rest are mixed onto the fourth. The
+window title shows the build number. See CHANGES.txt.
+
 New in 2.3
 ----------
 A Sound menu: Original stereo (the six channels on Paula's four
@@ -128,7 +138,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 2.3 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
+1.0 to 2.4 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
 Afrotechmods / FAmiga. Thanks to Zener
 and Sandman, and to reassembler for his guidance and direction.
 

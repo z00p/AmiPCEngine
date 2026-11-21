@@ -9,6 +9,9 @@ CdPathMax=512
 CdRam:		DS.B	64*1024		; banks $80-$87
 CdSRam:		DS.B	192*1024	; banks $68-$7F (Super System Card); after CdRam (cleared together)
 CdOpenBus:	DS.B	8*1024		; $FF: the locked BRAM bank
+	IFEQ	NO_ARCADE
+ArcWin:		DS.B	8*1024		; banks $40-$43 with the card: what a read or write passes through
+	ENDC
 AdRam:		DS.B	64*1024		; ADPCM RAM
 	IFEQ	CdSndOff
 AuCapB:		DS.L	CD_CAPMAX+2	; CD audio captured a frame: L, R words (index 0 the frame before's last)

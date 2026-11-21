@@ -237,8 +237,11 @@ Keyboard (always on, whatever the ports are set to)
 
 Joy-Control in the menu sets what is plugged into each port. Port 2
 is the joystick port, port 1 the mouse port (unplug the mouse, or
-leave port 1 on None). Both ports work the one PC Engine pad, so
-either can be used, or both at once.
+leave port 1 on None). With port 1 on None, port 2 and the keyboard
+work the one PC Engine pad. With a pad set on both ports, the game
+sees a multitap with two pads: port 2 is player 1 (with the
+keyboard), port 1 is player 2. Two-player games such as Bomberman
+'94 and the VS modes of fighting games then have a pad each.
   None              nothing read on that port
   Joystick          stick = d-pad, fire 1 = II, fire 2 = I
   CD32 Joypad       d-pad, red = II, blue = I, green = Select,
@@ -312,12 +315,14 @@ CD-ROM (beta)
     Rondo of Blood, Valis II and Fighting Street in WinUAE.
   * ADPCM speech matches the Mesen emulator's sample for sample in
     Gate of Thunder.
+  * Arcade Card (beta): CD games get an Arcade Card with its 2 MB, so
+    the games that need one run, with System Card 3.0 as above. Art of
+    Fighting (Ryuuko no Ken) and Strider Hiryuu play on a PiStorm
+    A1200. It needs 2 MB more Fast RAM while a CD game runs.
 
 Not supported (there is no code for them)
-  * Arcade Card games.
   * SuperGrafx games (no second VDC or priority chip).
-  * The sprite overflow and collision flags, multitap, the 6-button
-    pad.
+  * The sprite overflow and collision flags, the 6-button pad.
 
 Sound
   Original stereo (the default): six PSG channels play on the Amiga's
@@ -326,9 +331,9 @@ Sound
   in Soldier Blade and Parodius Da!) are played. Limits:
   * Amiga channels are hard left or right, so a centred PC Engine
     channel comes out of one side.
-  * With five or six channels playing, two wait for a voice: a new
-    note wins one from a note that has been held for a while, else
-    the quietest wait.
+  * With five or six channels playing, the loudest three keep a voice
+    each and the others are mixed in software onto the fourth, so no
+    note goes missing.
   Full channel mix (Sound menu, or SOUNDMIX): all six channels mixed
   in software at 22 kHz and played in 14 bits, centred channels in
   the middle, as CD games always play. The level is set
@@ -348,6 +353,9 @@ Known faults
   * Street Fighter II': the card takes 2.5 MB of Fast RAM.
   * R-Type on AGA: thin dark streaks under some enemies in places.
     They don't affect play.
+  * Art of Fighting, story mode: a few columns of junk can flicker at
+    the top right of the status bar.
+  * Art of Fighting: the zoom between the near and far views is jerky.
 
 
 8. History
@@ -370,7 +378,7 @@ Known faults
          Version 1.0 came out on 31 October, 1.1 on 2 November,
          1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November,
          2.0 on 12 November, 2.1 on 14 November, 2.2 on 16
-         November and 2.3 on 18 November.
+         November, 2.3 on 18 November and 2.4 on 21 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -384,7 +392,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 2.3    z00p
+  Versions 1.0 to 2.4    z00p
   Web and menu graphics  Multivac
   CD32 pad reading       Afrotechmods / FAmiga
   With thanks to         Zener and Sandman, and reassembler for his
@@ -401,7 +409,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 2.3, by z00p, are community updates
+Entertainment). Versions 1.0 to 2.4, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

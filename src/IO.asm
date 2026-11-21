@@ -295,6 +295,21 @@ Sf2Sel:	DC.W	0
 ;	D0.l = Trash!
 SetMapper:
 	MOVE.B	D7,TabMap(A3,D1.W)
+	IFEQ	NO_ARCADE
+	MOVEQ	#$40,D0			; banks $40-$43 with the card: trapped in any slot
+	EOR.B	D7,D0
+	AND.B	#$FC,D0
+	BNE.S	.nar
+	TST.B	ArcOn
+	BEQ.S	.nar
+	MOVE.B	#$80,ArcSlot(A3,D1.W)
+	BRA.S	.sl
+.nar:	TST.W	D1			; slot 0: the I/O page check
+	SEQ	D0
+	AND.B	#1,D0
+	MOVE.B	D0,ArcSlot(A3,D1.W)
+.sl:
+	ENDC
 
 	IFEQ	NO_MAPSHIFT
 	MOVEQ	#0,D0			; D1 = page 0-7: D0 = D1*$2000 as MULU gave it
@@ -359,6 +374,10 @@ CreaTabPagBuc:
 ; -------------------------------------------------------------------
 
 	CNOP	0,8
+	IFEQ	NO_ARCADE
+TrapRead:				; N (ArcSlot's $80): an Arcade Card bank
+	BMI.L	ArcRead
+	ENDC
 ReadIO:
 	MOVE.L	A4,D0
 	SUB.L	#IOAM,D0
@@ -555,7 +574,23 @@ readIO_0C00_0FFF:
 ; -------------------------------------------------------------------
 
 readIO_1000_13FF:
+	IFEQ	NO_TAP
+	TST.B	TapOn
+	BEQ.S	.one
+	MOVE.B	TapPort,D1		; the tap: the pad on the selected socket
+	BEQ.S	.one
+	SUBQ.B	#1,D1
+	BEQ.S	.two
+	MOVEQ	#$0F,D1			; an empty socket, or none selected: nothing pressed
+	BRA.S	TapOut
+.two:	MOVE.B	TapJoy2,D1
+	BRA.S	TapIn
+.one:
+	ENDC
 	MOVE.B	JoyX(A3),D1
+	IFEQ	NO_TAP
+TapIn:
+	ENDC
 	IFEQ	NO_IOBUF
 	BTST	#0,PadLatch		; (IOAM+$1000 holds the last read as well)
 	ELSE
@@ -572,6 +607,9 @@ KeyLow:
 	CLR.B	D1
 .noClr:
 	ENDC
+	IFEQ	NO_TAP
+TapOut:
+	ENDC
 	IFEQ	NO_IOREAD
 	OR.B	#$30,D1			; bits 4 and 5 read 1
 	ENDC
@@ -582,6 +620,36 @@ KeyLow:
 	RTS
 
 ; -------------------------------------------------------------------
+
+	IFEQ	NO_TAP
+; A $1000 write (new value at (A4), PadLatch = the last one) through the tap: a rising SEL
+; with CLR low selects the next socket (at most past the fifth), a rising CLR with SEL high
+; selects the first. The selected pad sees the write as a pad on its own would.
+TapWrite:
+	TST.B	TapOn
+	BEQ.S	.x
+	MOVEM.L	D1-D2,-(SP)
+	MOVE.B	(A4),D1
+	MOVE.B	PadLatch,D2
+	BTST	#1,D1
+	BNE.S	.nadv
+	BTST	#0,D2
+	BNE.S	.nadv
+	BTST	#0,D1
+	BEQ.S	.nadv
+	CMP.B	#5,TapPort
+	BCC.S	.nadv
+	ADDQ.B	#1,TapPort
+.nadv:	BTST	#0,D1
+	BEQ.S	.done
+	BTST	#1,D2
+	BNE.S	.done
+	BTST	#1,D1
+	BEQ.S	.done
+	CLR.B	TapPort
+.done:	MOVEM.L	(SP)+,D1-D2
+.x:	RTS
+	ENDC
 
 readIO_1400_17FF:
 	IFEQ	NO_TIMER
@@ -636,6 +704,10 @@ readIO_1800_1FFF:
 
 ; -------------------------------------------------------------------
 
+	IFEQ	NO_ARCADE
+TrapWrite:
+	BMI.L	ArcWrite
+	ENDC
 WriteIO:
 	MOVE.L	A4,D0
 	SUB.L	#IOAM,D0
@@ -674,6 +746,9 @@ WriteIO:
 	BCS	writeTimer
 	CMP.W	#$1400,D0
 	BCC	writeIrqPort
+	IFEQ	NO_TAP
+	BSR	TapWrite
+	ENDC
 	MOVE.B	(A4),PadLatch
 	RTS
 .psgBuf:
@@ -1191,6 +1266,12 @@ IntVector:	DC.W	$FFF8
 	IFEQ	NO_IOBUF
 IoBuf:	DC.B	0
 PadLatch:	DC.B	0
+	ENDC
+	IFEQ	NO_TAP
+TapOn:		DC.B	0		; a pad on each port
+TapPort:	DC.B	5		; the selected socket, 5 = none
+TapJoy2:	DC.B	0		; player 2's bits, as JoyX
+	EVEN
 	ENDC
 PSGWaveCnt:	DS.W	8
 PSGBuffer:	DS.B	8*8

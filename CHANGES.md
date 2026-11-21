@@ -4,6 +4,29 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.4
+
+- Arcade Card (beta): CD games get an Arcade Card, as in the Mesen
+  emulator: 2 MB of RAM, four ports through banks $40 to $43 and the
+  registers at $1A00, the shift register and the card's ID. Art of
+  Fighting (Ryuuko no Ken) and Strider Hiryuu play on a PiStorm A1200;
+  Power ON starts the card again from empty. A CD game takes 2 MB
+  more Fast RAM.
+- Two players: with a pad set on both ports in Joy-Control, the game
+  sees a multitap (TurboTap) with two pads. Port 2 is player 1 (with
+  the keyboard), port 1 is player 2; the other three sockets are
+  empty. With port 1 on None it is one pad, as before. Bomberman '94
+  plays with two people on an A1200.
+- Sound, Original stereo: with five or six channels playing, the
+  loudest three keep a voice each and the others are mixed in
+  software onto the fourth voice, so no note goes missing. Before,
+  the quietest waited.
+- The window title shows the build number.
+- Known issue: Art of Fighting's story mode can show a few columns of
+  junk at the top right of the status bar.
+- Known issue: Art of Fighting's zoom between the near and far views is
+  jerky.
+
 ## New in 2.3
 
 - Sound: a Sound menu in the launcher, kept by Save Prefs, with two
