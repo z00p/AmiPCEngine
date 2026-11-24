@@ -94,8 +94,48 @@ IOAM_Buc:
 	CLR.B	IoBuf
 	CLR.B	PadLatch
 	ENDC
+	IFEQ	NO_SIX
+	CLR.B	SixTog			; the six-button pads start on their first page
+	CLR.L	SixEdges		; (SixEdges, SixCnt, SixSum, SixAuto) two-button until a game reads six
+	ENDC
 
 	RTS
+
+	IFEQ	NO_SIX
+; SixFrame, at line 0 of each PCE frame. The Avenue Pad 6 turns its page on every CLR pulse, so a
+; game that reads the pads once a frame (one pulse) would get III-VI and the page ID (all four
+; directions held) every other frame. Games written for the pad read it twice a frame (two
+; pulses, one pass per page); measured in Mesen, 23 Nov 2026: SF2', Ryuuko no Ken, Garou Densetsu
+; Special and World Heroes 2 do so for thousands of frames in a row, ordinary games (Gate of
+; Thunder, Valis II, Bomberman '93, Bonk, R-Type, Soldier Blade) for at most two. The pulses are
+; counted over SIX_WIN frames with pad reads (frames without, as when loading, don't count), so
+; it doesn't matter where in the frame a game reads: SIX_ON or more shows the second page,
+; SIX_OFF or fewer hides it, anything between keeps the last choice.
+SIX_WIN=8
+SIX_ON=14
+SIX_OFF=10
+SixFrame:
+	MOVE.B	SixEdges,D0
+	BEQ.S	.x
+	CLR.B	SixEdges
+	ADD.B	D0,SixSum
+	BCC.S	.n
+	ST	SixSum			; (saturates)
+.n:	ADDQ.B	#1,SixCnt
+	CMP.B	#SIX_WIN,SixCnt
+	BCS.S	.x
+	MOVE.B	SixSum,D0
+	CLR.B	SixCnt
+	CLR.B	SixSum
+	CMP.B	#SIX_ON,D0
+	BCS.S	.off
+	ST	SixAuto
+.x:	RTS
+.off:	CMP.B	#SIX_OFF+1,D0
+	BCC.S	.x
+	SF	SixAuto
+	RTS
+	ENDC
 
 ; -------------------------------------------------------------------
 
@@ -584,10 +624,29 @@ readIO_1000_13FF:
 	MOVEQ	#$0F,D1			; an empty socket, or none selected: nothing pressed
 	BRA.S	TapOut
 .two:	MOVE.B	TapJoy2,D1
+	IFEQ	NO_SIX
+	TST.B	SixTog
+	BEQ.S	TapIn
+	TST.B	SixAuto
+	BEQ.S	TapIn
+	TST.B	Six2
+	BEQ.S	TapIn
+	MOVE.B	TapJoy6,D1		; a six-button pad on its second page
+	ENDC
 	BRA.S	TapIn
 .one:
 	ENDC
 	MOVE.B	JoyX(A3),D1
+	IFEQ	NO_SIX
+	TST.B	SixTog
+	BEQ.S	.p1
+	TST.B	SixAuto
+	BEQ.S	.p1
+	TST.B	Six1
+	BEQ.S	.p1
+	MOVE.B	Joy6,D1			; a six-button pad on its second page: III-VI, directions 0000
+.p1:
+	ENDC
 	IFEQ	NO_TAP
 TapIn:
 	ENDC
@@ -749,6 +808,15 @@ WriteIO:
 	IFEQ	NO_TAP
 	BSR	TapWrite
 	ENDC
+	IFEQ	NO_SIX
+	BTST	#1,(A4)			; a rising CLR turns the six-button pads' page (Avenue Pad 6)
+	BEQ.S	.ns
+	BTST	#1,PadLatch
+	BNE.S	.ns
+	NOT.B	SixTog
+	ADDQ.B	#1,SixEdges
+.ns:
+	ENDC
 	MOVE.B	(A4),PadLatch
 	RTS
 .psgBuf:
@@ -790,7 +858,11 @@ WriteIO_RET:
 
 writeIO_0000_03FF:
 	AND.W	#$0003,D0
+	IFEQ	NO_DOTMIX
+	BEQ	writeIO_0000
+	ELSE
 	BEQ.S	writeIO_0000
+	ENDC
 
 	BTST	#1,D0
 	BEQ.S	WriteIO_RET
@@ -815,6 +887,14 @@ writeIO_0000_03FF:
 	BNE.S	.noCR
 	JSR	RtgCRLog		; RTG: control register writes per line
 .noCR:
+	IFEQ	NO_DOTMIX
+	CMP.W	#$000A,D1
+	BCS.S	.noHT
+	CMP.W	#$000B,D1
+	BHI.S	.noHT
+	JSR	RtgHTLog		; RTG: horizontal timing writes per line
+.noHT:
+	ENDC
 	ENDC
 	CMP.W	#$0002,D1
 	BEQ.S	writeVDP_02
@@ -1049,6 +1129,9 @@ logScrollXY:
 
 writeIO_0400_07FF:
 	AND.W	#$0007,D0
+	IFEQ	NO_DOTMIX|NO_RTG
+	BEQ.S	writeIO_0400
+	ENDC
 	CMP.W	#$0002,D0
 	BEQ.S	writeIO_0402
 	CMP.W	#$0003,D0
@@ -1058,6 +1141,11 @@ writeIO_0400_07FF:
 	CMP.W	#$0005,D0
 	BEQ.S	writeIO_0405
 	RTS
+	IFEQ	NO_DOTMIX|NO_RTG
+writeIO_0400:
+	MOVE.B	(A4),VceCtl		; the dot clock (bits 0-1): RtgFrame takes it per line
+	JMP	RtgHTLog
+	ENDC
 writeIO_0402:
 	MOVE.B	(A4),PAL_Index+1(A3)
 	RTS
@@ -1271,6 +1359,19 @@ PadLatch:	DC.B	0
 TapOn:		DC.B	0		; a pad on each port
 TapPort:	DC.B	5		; the selected socket, 5 = none
 TapJoy2:	DC.B	0		; player 2's bits, as JoyX
+	EVEN
+	ENDC
+	IFEQ	NO_SIX
+SixTog:		DC.B	0		; the six-button pads' page: 0 = I, II, Select, Run; $FF = III-VI
+	EVEN
+SixEdges:	DC.B	0		; CLR rising edges in this PCE frame
+SixCnt:		DC.B	0		; frames with pad reads in this window
+SixSum:		DC.B	0		; CLR rising edges in this window
+SixAuto:	DC.B	0		; the game reads six-button pads: their second page is shown
+Six1:		DC.B	0		; player 1's pad is a six-button one
+Six2:		DC.B	0		; player 2's
+Joy6:		DC.B	$0F		; player 1's second page, as JoyX: III-VI in bits 4-7
+TapJoy6:	DC.B	$0F		; player 2's
 	EVEN
 	ENDC
 PSGWaveCnt:	DS.W	8

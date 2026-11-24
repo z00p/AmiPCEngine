@@ -27,6 +27,22 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
+New in 2.5
+----------
+Six-button pad: a CD32 pad is an Avenue Pad 6 for the games made for
+one (Street Fighter II', Art of Fighting), with green, yellow and the
+shoulders as III to VI, and a two-button pad for every other game,
+picked by how the game reads the pad: no switch to set. Joy-Control
+has four pad types: None, Joystick, CD32 pad and CD32 (KTRL+); saved
+settings carry over. PadCheck, a small Amiga program in the drawer,
+shows what each joystick port sends as the emulator reads it and which
+setting to use. PadTest6.pce, a six-button pad test. cdshrink, a
+Python script for a PC, Mac or Linux in the PC Tools drawer, makes a
+small copy of a CD game without its CD music (Gate of Thunder: 533 MB
+to 26 MB). A CD music tick in the Sound menu. Art of Fighting's far
+view is drawn at its own width, so the picture no longer jumps. See
+CHANGES.txt.
+
 New in 2.4
 ----------
 Arcade Card (beta): CD games get an Arcade Card with its 2 MB, so Art
@@ -138,7 +154,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 2.4 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
+1.0 to 2.5 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
 Afrotechmods / FAmiga. Thanks to Zener
 and Sandman, and to reassembler for his guidance and direction.
 

@@ -40,6 +40,8 @@ PROGDIR:Homebrew) with a short note and PadTest.pce (2.3: our own pad test HuCar
 tools/padtest_hucard.py), and the Saves drawer for backup RAM, with a note too. NO ROMs:
 the script fails if anything that looks like a HuCard or disc image is staged, apart
 from PadTest.pce byte for byte as the script builds it.
+2.5: the PC Tools drawer with cdshrink.py and cdshrink.txt (tools/), the PC script that
+makes small CD images without the CD music.
 
 The LhA step is not here: it runs in WinUAE (winuae/make_lha.ps1).
 
@@ -55,6 +57,7 @@ ROM_EXT = {".pce", ".sgx", ".hes", ".bin", ".iso", ".cue", ".rom", ".img", ".zip
 # Names in the drawer (2.0): short, the drawer says AmiPCEngine. FFS allows
 # 30 characters with ".info", so no "AmiPCEngine " prefix on the Debug names.
 FAST, FAST_DBG = "AGA", "AGA Debug"
+PCTOOLS = "PC Tools"                                  # 2.5: cdshrink, run on a PC
 COLOUR, COLOUR_DBG = "AGA Colour", "AGA Colour Debug"
 RTG, RTG_DBG = "RTG", "RTG Debug"
 PROGRAMS = {FAST, FAST_DBG, COLOUR, COLOUR_DBG, RTG, RTG_DBG}
@@ -228,6 +231,40 @@ def glow(im):
     return b"FORM" + struct.pack(">I", len(form)) + form
 
 
+def draw_pad():
+    """A small grey gamepad with a d-pad and two round buttons (blue, red), for PadCheck."""
+    from PIL import Image, ImageDraw
+    im = Image.new("RGB", (W, H), (255, 0, 255))
+    d = ImageDraw.Draw(im)
+    out, body, lite, shade = (24, 32, 56), (200, 200, 206), (236, 236, 240), (60, 60, 70)
+    d.rounded_rectangle([5, 14, 42, 34], radius=8, fill=shade)
+    d.rounded_rectangle([3, 12, 40, 32], radius=8, fill=body, outline=out)
+    d.line([10, 14, 33, 14], fill=lite)
+    d.rectangle([9, 20, 19, 23], fill=out); d.rectangle([12, 17, 15, 26], fill=out)
+    d.ellipse([27, 17, 32, 22], fill=(66, 106, 172), outline=out)
+    d.ellipse([31, 22, 36, 27], fill=(200, 50, 50), outline=out)
+    return im
+
+
+def tool_icon(im, x, y):
+    gadget = struct.pack(">IhhhhHHHIIIIIHI", 0, 0, 0, W, H + 1, 4, 3, 1, 1, 0, 0, 0, 0, 0, 1)
+    head = struct.pack(">HH", 0xE310, 1) + gadget + struct.pack(
+        ">BBIIiiIII", 3, 0, 0, 0, x, y, 0, 0, 4096)   # WBTOOL, no default tool, no tooltypes
+    assert len(head) == 78, len(head)
+    return head + planar(im) + glow(im)
+
+
+def padcheck_binary():
+    """PadCheck (tools/padcheck), assembled now: the joystick ports as the emulator reads them."""
+    import subprocess, tempfile
+    with tempfile.TemporaryDirectory() as t:
+        p = os.path.join(t, "PadCheck")
+        subprocess.run([os.path.join(BASE, "tools", "vasmm68k_mot.exe"), "-quiet", "-devpac", "-nocase", "-m68000",
+                        "-Fhunkexe", "-nosym", "-I" + os.path.join(BASE, "src"), "-o", p, "PadCheck.asm"],
+                       cwd=os.path.join(BASE, "tools", "padcheck"), check=True, capture_output=True)
+        return open(p, "rb").read()
+
+
 def project_icon(im, default_tool, x, y):
     gadget = struct.pack(">IhhhhHHHIIIIIHI", 0, 0, 0, W, H + 1, 4, 3, 1, 1, 0, 0, 0, 0, 0, 1)
     head = struct.pack(">HH", 0xE310, 1) + gadget + struct.pack(
@@ -246,8 +283,8 @@ def at(icon, x, y):
 # The main drawer's snapshotted layout (window-relative, icon top left): two columns, the
 # programs, then the drawers, then the text files; the window opens just big enough.
 COL = (60, 190)                                       # column centres
-ROW = (6, 100, 172)                                   # tops: programs (70 high), drawers, texts
-WIN = (300, 290)
+ROW = (6, 100, 172, 244)                              # tops: programs (70 high), drawers, texts, PC Tools
+WIN = (300, 362)
 
 
 def col(c, w):
@@ -297,25 +334,28 @@ def build(mode):
                                         "colourdebug": "AmiPCEngine_ColourDebug"}[mode])
 
 
-def padtest_rom():
-    """PadTest.pce as tools/padtest_hucard.py builds it now (our own HuCard, no game data)."""
+PADTESTS = {"PadTest.pce": "two", "PadTest6.pce": "six"}   # (2.5: a two- and a six-button reader)
+
+
+def padtest_rom(name="PadTest.pce"):
+    """A pad test HuCard as tools/padtest_hucard.py builds it now (our own, no game data)."""
     import subprocess, tempfile
     with tempfile.TemporaryDirectory() as t:
-        p = os.path.join(t, "PadTest.pce")
-        subprocess.run([sys.executable, "-I", os.path.join(BASE, "tools", "padtest_hucard.py"), p],
-                       check=True, capture_output=True)
+        p = os.path.join(t, name)
+        subprocess.run([sys.executable, "-I", os.path.join(BASE, "tools", "padtest_hucard.py"), p,
+                        PADTESTS[name]], check=True, capture_output=True)
         return open(p, "rb").read()
 
 
 def check_no_roms(out):
     """No HuCard, disc image or archive may be staged; nothing big except the programs. The one
-    exception: Homebrew/PadTest.pce, and only byte for byte as the script builds it."""
-    pad = padtest_rom()
+    exception: the pad tests in Homebrew, and only byte for byte as the script builds them."""
+    pads = {n: padtest_rom(n) for n in PADTESTS}
     for root, _, files in os.walk(out):
         for f in files:
             p = os.path.join(root, f)
             ext = os.path.splitext(f)[1].lower()
-            if f == "PadTest.pce" and os.path.basename(root) == "Homebrew" and open(p, "rb").read() == pad:
+            if f in pads and os.path.basename(root) == "Homebrew" and open(p, "rb").read() == pads[f]:
                 continue
             if ext in ROM_EXT:
                 sys.exit("ROM-like file staged: %s" % p)
@@ -361,7 +401,8 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False, colour=None, 
     amiga_text(os.path.join(BASE, "CHANGES.md"), os.path.join(d, "CHANGES.txt"), version, draft, wrap=76)
     amiga_text(os.path.join(BASE, "release", "AmiPCEngine.readme"), os.path.join(out, "AmiPCEngine.readme"), version, draft)
     open(os.path.join(d, "Homebrew", "Put HuCards here.txt"), "wb").write(HOMEBREW_NOTE.encode("ascii"))
-    open(os.path.join(d, "Homebrew", "PadTest.pce"), "wb").write(padtest_rom())   # the pad test (ReadMe)
+    for n in PADTESTS:                                                             # the pad tests (ReadMe)
+        open(os.path.join(d, "Homebrew", n), "wb").write(padtest_rom(n))
     im = draw_drawer()
     di = drawer_icon(im)
     put("Homebrew.info", at(di, col(1, W), ROW[1]))                    # the ROM drawer's icon
@@ -371,6 +412,13 @@ def stage(binary, out, version, draft, debug=None, rtg_copy=False, colour=None, 
     page = draw_page()
     put("ReadMe.txt.info", project_icon(page, "SYS:Utilities/MultiView", col(0, W), ROW[2]))
     put("CHANGES.txt.info", project_icon(page, "SYS:Utilities/MultiView", col(1, W), ROW[2]))
+    os.makedirs(os.path.join(d, PCTOOLS))                              # the PC script and its guide
+    shutil.copyfile(os.path.join(BASE, "tools", "cdshrink.py"), os.path.join(d, PCTOOLS, "cdshrink.py"))
+    amiga_text(os.path.join(BASE, "tools", "cdshrink.txt"), os.path.join(d, PCTOOLS, "cdshrink.txt"), version, draft)
+    put(os.path.join(PCTOOLS, "cdshrink.txt.info"), project_icon(page, "SYS:Utilities/MultiView", col(0, W), ROW[0]))
+    put(PCTOOLS + ".info", at(di, col(0, W), ROW[3]))
+    put("PadCheck", padcheck_binary())                                 # the Amiga pad checker (ReadMe)
+    put("PadCheck.info", tool_icon(draw_pad(), col(1, W), ROW[3]))
     open(os.path.join(out, "AmiPCEngine.info"), "wb").write(drawer_icon(im, *WIN))   # the drawer's own icon
     check_no_roms(out)
     n = 0

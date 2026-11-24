@@ -66,7 +66,7 @@ Not supported: Arcade Card games, SuperGrafx.
   default. The switch block is at the top of `src/Main.asm`. `-DDbgRows=1`
   draws timing rows at the top of the screen
   (see `docs/package/Debug rows.txt`).
-- Release package: `python tools/make_release.py --build --version 2.4`
+- Release package: `python tools/make_release.py --build --version 2.5`
   builds the release binary and stages the drawer; the archive is made with
   the Amiga's own `lha`.
 
@@ -83,7 +83,7 @@ Not supported: Arcade Card games, SuperGrafx.
 ## Credit
 
 - **AmiPCEngine:** Juan Antonio Gomez Galvez (GUS Entertainment).
-- **Versions 1.0 to 2.4:** z00p.
+- **Versions 1.0 to 2.5:** z00p.
 - **Web and menu graphics:** Multivac.
 - **CD32 pad reading:** Afrotechmods / FAmiga.
 - **Thanks:** Zener and Sandman, and reassembler for his guidance and direction.
@@ -91,7 +91,7 @@ Not supported: Arcade Card games, SuperGrafx.
 
 ## Licence
 
-AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 2.4, by
+AmiPCEngine is freeware by Juan Antonio Gomez Galvez. Versions 1.0 to 2.5, by
 z00p, are community updates made and published with his permission. See [NOTICE.md](NOTICE.md).
 
 ## Trademarks

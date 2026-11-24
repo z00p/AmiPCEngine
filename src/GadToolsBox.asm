@@ -805,9 +805,13 @@ ScanLabels:
 DispLabels:
 	DC.L	DispLab0,DispLab1,0
 PortLabels:
+	IFEQ	NO_SIX
+	DC.L	PortLab0,PortLab1,PortLab5,PortLab6	; the four types (Main.asm PadPrg1)
+	ELSE
 	DC.L	PortLab0,PortLab1,PortLab2,PortLab3
 	IFEQ	NO_CD32KIT
 	DC.L	PortLab4
+	ENDC
 	ENDC
 	DC.L	0
 ScanLab0:	DC.B	'Off',0
@@ -825,6 +829,10 @@ PortLab2:	DC.B	'CD32 Joypad',0
 PortLab3:	DC.B	'Std Joypad',0
 	IFEQ	NO_CD32KIT
 PortLab4:	DC.B	'KTRL CD32+',0
+	ENDC
+	IFEQ	NO_SIX
+PortLab5:	DC.B	'CD32 pad',0
+PortLab6:	DC.B	'CD32 (KTRL+)',0
 	ENDC
 	CNOP	0,2
 	ENDC
@@ -892,7 +900,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
+	IFEQ	NO_REL25
+    DC.B    'AmiPC-Engine Emulator v2.5'
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.4'
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.3'
 	ENDC
@@ -928,7 +940,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
+	IFEQ	NO_REL25
+    DC.B    'AmiPC-Engine Emulator v2.5'
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.4'
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.3'
 	ENDC
@@ -2019,7 +2035,11 @@ AboutIText0:
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
+	IFEQ	NO_REL25
+    DC.B    'AmiPC-Engine Emulator v2.5',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.4',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.3',0
 	ENDC
@@ -2054,7 +2074,11 @@ AboutIText1:
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
+	IFEQ	NO_REL25
+    DC.B    '(23 November 2026)',0
+	ELSE
     DC.B    '(21 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(18 November 2026)',0
 	ENDC
@@ -2089,7 +2113,11 @@ AboutITextZ:
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
+	IFEQ	NO_REL25
+    DC.B    'Version 2.5: z00p',0
+	ELSE
     DC.B    'Version 2.4: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 2.3: z00p',0
 	ENDC
@@ -2628,6 +2656,19 @@ MainMenuNewSnd1:
     DC.L    0
     DC.W    $0001
     DC.L    1,0
+	IFEQ	NO_CDMOFF
+    DC.B    2,0
+    DC.L    $FFFFFFFF
+    DC.L    0
+    DC.W    $0000
+    DC.L    0,0
+MainMenuNewCdm:
+    DC.B    2,0			; CD music: a tick of its own (CHECKIT, MENUTOGGLE)
+    DC.L    MainMenuMNameCdm
+    DC.L    0
+    DC.W    $0009
+    DC.L    0,0
+	ENDC
 	IFEQ	NO_TONE
     DC.B    1,0			; Tone: one of three ticked (PonPrefs, TonePick0-2)
     DC.L    MainMenuMNameTone
@@ -2726,6 +2767,10 @@ MainMenuMNameSnd0:
     DC.B    'Original stereo',0
 MainMenuMNameSnd1:
     DC.B    'Full channel mix',0
+	IFEQ	NO_CDMOFF
+MainMenuMNameCdm:
+    DC.B    'CD music',0
+	ENDC
 MainMenuMNameTone:
     DC.B    'Tone  ',0
 MainMenuMNameTone0:

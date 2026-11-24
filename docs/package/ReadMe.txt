@@ -130,9 +130,10 @@ launcher such as Lupa):
              Insert would and started at once.
   AGA / RTG  the display for this run, over the RTG ToolType.
   ONEGAME    leaving the game (Esc, Help, or both CD32 shoulder
-             buttons) quits the program, after the game is saved, so
-             you go straight back to the launcher. A HuCard that
-             can't be loaded shows the error, then quits.
+             buttons, with Play in six-button games) quits the
+             program, after the game is saved, so you go straight
+             back to the launcher. A HuCard that can't be loaded
+             shows the error, then quits.
   MENU       load the HuCard but stay in the menu.
   PROFILE=   accepted for launchers that use it; this program has
              one profile (030 still runs, with return code 5).
@@ -199,6 +200,12 @@ Sound menu     how the PC Engine's six sound channels are played (see
                Original stereo   the channels share Paula's four
                                  voices (the default).
                Full channel mix  all six through a software mix.
+               CD music          ticked (the default): a CD game's
+                                 music is loaded with the disc. Not
+                                 ticked: the CD music is left out,
+                                 silent, and needs no Fast RAM;
+                                 sound effects and ADPCM speech stay.
+                                 From the next Insert of a .cue.
 Tone menu      Bright (unfiltered), Soft (4.5 kHz), Warm (A1200
                filter): Soft, the default, cuts the treble of the
                Full channel mix a little; Warm turns on the Amiga's
@@ -207,8 +214,8 @@ Tone menu      Bright (unfiltered), Soft (4.5 kHz), Warm (A1200
                Stereo, Soft sounds as Bright.
 
 Save Prefs keeps the Screen, Display (the RTG mode), Scanlines,
-Joy-Control, Sound and Tone settings and the drawer the requester was
-last in.
+Joy-Control, Sound (with CD music) and Tone settings and the drawer
+the requester was last in.
 
 On OS 3.5 and later (chooser.gadget) the Screen, Display, Scanlines
 and port settings open a list to pick from. Without chooser.gadget,
@@ -243,26 +250,53 @@ sees a multitap with two pads: port 2 is player 1 (with the
 keyboard), port 1 is player 2. Two-player games such as Bomberman
 '94 and the VS modes of fighting games then have a pad each.
   None              nothing read on that port
-  Joystick          stick = d-pad, fire 1 = II, fire 2 = I
-  CD32 Joypad       d-pad, red = II, blue = I, green = Select,
-                    yellow = Run, Play = Run (most CD32 adapters send
-                    Start as Play), Forward = II, Rewind = I,
-                    both shoulder buttons together = back to the menu
-  Std Joypad        as Joystick, and fire 3 (pin 5) = Run
-  KTRL CD32+        as CD32 Joypad, with the pad clocked the other
-                    way round. Try it when a CD32 pad or adapter
-                    misses or mixes up buttons on CD32 Joypad (the
-                    KTRL CD32+ and the Mega Multi adapter in CD32
-                    mode want it; the first KTRL CD32 wants CD32
-                    Joypad)
+  Joystick          stick = d-pad, fire 1 = II, fire 2 = I, and a
+                    third fire button (pin 5), where there is one,
+                    = Run
+  CD32 pad          a CD32 pad or adapter, see below
+  CD32 (KTRL+)      the same, with the pad clocked the other way
+                    round. The KTRL CD32+ and the Mega Multi adapter
+                    in CD32 mode want it; the first KTRL CD32 and
+                    most adapters want CD32 pad. Try the other one
+                    when a pad misses or mixes up buttons.
 The first start has port 1 on None and port 2 on Joystick.
 
-Pad test: PadTest.pce in the Homebrew drawer is a small HuCard of our
-own. It lists each PC Engine button with the CD32 pad and joystick
-buttons that drive it, and a box that turns green while the game sees
-the button held. If a button flickers or does nothing in a game, run
-PadTest, try the other CD32 setting (CD32 Joypad or KTRL CD32+), and
-send a photo of the screen with the name of your pad or adapter.
+A CD32 pad works as a PC Engine pad with two or six buttons, picked
+by the game: the emulator watches how the game reads the pad. Nearly
+every game reads it as a two-button pad:
+  red = II, blue = I, green = Select, yellow = Run, Play = Run (most
+  CD32 adapters send Start as Play), left shoulder = Select, right
+  shoulder = Run; both shoulders together = back to the menu.
+Games made for the six-button pad (Avenue Pad 6), such as Street
+Fighter II' and Art of Fighting, get one, a fraction of a second after
+they start reading it that way:
+  red = II, blue = I, green = III, yellow = IV, left shoulder = V,
+  right shoulder = VI, Play = Run, Del on the keyboard = Select; both
+  shoulders and Play together = back to the menu.
+The real pad has a 2/6 switch, as games not made for it misread it
+in six-button mode; here that choice is made for you.
+
+PadCheck, in the AmiPCEngine drawer, is a small Amiga program that
+reads the two joystick ports as the emulator does in a game, with the
+Workbench still running: the stick and fire buttons, and the CD32 read
+both ways. Hold the buttons one by one and it shows what arrives, and
+it says which Joy-Control setting suits the pad. Other pad testers go
+through the OS (lowlevel.library, Poseidon), so they show pads that
+the emulator can't read in a game, USB pads above all. On some
+systems they also show a pad in a joystick port a second time, as a
+third or fourth port, as if it were a USB pad, with no USB pad
+plugged in. Close them while PadCheck runs: two programs reading a
+CD32 pad in one frame make it unsteady.
+
+Pad test: PadTest.pce and PadTest6.pce in the Homebrew drawer are
+small HuCards of our own. Each lists the PC Engine buttons with the
+CD32 pad and joystick buttons that drive them, and a box that turns
+green while the game sees the button held. PadTest reads the pad as
+nearly all games do (two buttons), PadTest6 as games made for the
+six-button pad do (III to VI as well). If a button flickers or does
+nothing in a game, run them, try the other CD32 setting (CD32 pad or
+CD32 (KTRL+)), and send a photo of the screen with the name of your
+pad or adapter.
 
 Juan's built-in debugger (keys P, T and S) is not in this program.
 
@@ -303,6 +337,10 @@ CD-ROM (beta)
     II (a 520 MB BIN) takes about 40 seconds over a network share on
     a PiStorm A1200. Use a machine with plenty of Fast RAM: when it
     runs out, the rest of the music stays silent.
+  * A small copy without the CD music loads in seconds and needs much
+    less Fast RAM: cdshrink makes one on a PC, keeping the sound
+    effects and ADPCM speech (Gate of Thunder: 533 MB to 26 MB). It is
+    in the PC Tools drawer, with cdshrink.txt on how to use it.
   * CD music and ADPCM speech play. A CD game sends all its sound,
     the PSG too, through the software mix, on AGA and RTG. The music
     level is the CDMUSIC ToolType.
@@ -322,7 +360,13 @@ CD-ROM (beta)
 
 Not supported (there is no code for them)
   * SuperGrafx games (no second VDC or priority chip).
-  * The sprite overflow and collision flags, the 6-button pad.
+  * The sprite overflow and collision flags.
+  * USB pads and keyboards (Poseidon or other USB stacks). The emulator
+    stops the OS while a game runs and reads the two joystick ports
+    directly, so a USB stack can't run during play. Use a pad in a
+    joystick port: a CD32 pad, or a joystick-port adapter for other
+    pads (Joy-Control, Joystick setting). PadCheck shows what the
+    emulator sees (section 5).
 
 Sound
   Original stereo (the default): six PSG channels play on the Amiga's
@@ -353,9 +397,10 @@ Known faults
   * Street Fighter II': the card takes 2.5 MB of Fast RAM.
   * R-Type on AGA: thin dark streaks under some enemies in places.
     They don't affect play.
-  * Art of Fighting, story mode: a few columns of junk can flicker at
-    the top right of the status bar.
   * Art of Fighting: the zoom between the near and far views is jerky.
+  * A file that is not a HuCard (a text file, say) picked as a HuCard
+    can end the emulator and upset a network share. Pick .pce files
+    only.
 
 
 8. History
@@ -378,7 +423,8 @@ Known faults
          Version 1.0 came out on 31 October, 1.1 on 2 November,
          1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November,
          2.0 on 12 November, 2.1 on 14 November, 2.2 on 16
-         November, 2.3 on 18 November and 2.4 on 21 November.
+         November, 2.3 on 18 November, 2.4 on 21 November and 2.5
+         on 23 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -392,7 +438,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 2.4    z00p
+  Versions 1.0 to 2.5    z00p
   Web and menu graphics  Multivac
   CD32 pad reading       Afrotechmods / FAmiga
   With thanks to         Zener and Sandman, and reassembler for his
@@ -409,7 +455,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 2.4, by z00p, are community updates
+Entertainment). Versions 1.0 to 2.5, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

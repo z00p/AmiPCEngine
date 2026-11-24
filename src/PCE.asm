@@ -78,15 +78,24 @@ PCE_FrameTop:
 	ENDC
 	MOVE.B	VDP_Regs+(5*2)+1,RtgCRStart
 	CLR.W	RtgCRN
+	IFEQ	NO_DOTMIX
+	JSR	RtgHTTop
+	ENDC
 	ENDC
 	IFEQ	NO_BGLINE|NO_BGMASK
 	JSR	BgLogTop
+	ENDC
+	IFEQ	NO_SIX
+	JSR	SixFrame		; two-button or six-button reads this frame
 	ENDC
 	IFNE	AutoPress
 	IFEQ	AutoPressHost
 	JSR	AutoPressBits		; pad bits for this PCE frame
 	MOVE.B	D1,AutoPressCur
 	MOVE.B	D1,JoyX(A3)
+	IFNE	SixTest
+	JSR	AutoSix
+	ENDC
 	ENDC
 	ENDC
 	MOVEQ	#0,D1			; (not 7: a full entry)

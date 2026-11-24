@@ -1006,7 +1006,14 @@ ScAuStart:				; AUDIO START POS
 	BSR	CdGetTrack
 	TST.L	D1
 	BMI.S	.busy
-	MOVE.L	TRK_LAST(A0),AuEnd
+	MOVE.L	TRK_LAST(A0),D0		; it plays to the end of the track: its POSTGAP is part of it
+	ADD.L	TRK_POST(A0),D0		; (not in the file, so silent, as the gap on a disc)
+	MOVE.L	CdSecs,D1
+	SUBQ.L	#1,D1
+	CMP.L	D1,D0
+	BLS.S	.ie
+	MOVE.L	D1,D0
+.ie:	MOVE.L	D0,AuEnd
 	BSR	CdCurSector
 	MOVE.L	D2,D1
 	BSR	CdSeekMC
@@ -2205,6 +2212,10 @@ CdLoadAll:
 	MOVE.L	D0,CdLBuf
 	MOVE.L	#CD_BIGSECS,CdLSecs
 .small:	SF	CdANo			; set when the audio RAM runs out
+	IFEQ	NO_CDMOFF
+	TST.B	DirPrefs+$1E		; CD music off (Sound menu): no audio in RAM, the tracks silent
+	SNE	CdANo
+	ENDC
 	MOVEQ	#0,D5			; D5 = file
 .file:	CMP.W	CdFiles,D5
 	BCC	.done

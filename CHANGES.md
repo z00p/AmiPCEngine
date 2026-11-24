@@ -4,6 +4,53 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.5
+
+- cdshrink, in the new PC Tools drawer: a Python script for a PC, Mac
+  or Linux that makes a small copy of a CD game without the CD music.
+  Data tracks stay whole and every track keeps its place on the disc,
+  so the game finds its data as before; sound effects and ADPCM
+  speech stay. Gate of Thunder goes from 533 MB to 26 MB and loads in
+  seconds. The copy keeps the cue's name, so it shares the game's save
+  file. cdshrink.txt says how to use it.
+- Six-button pad (Avenue Pad 6): a CD32 pad is one for games made for
+  it (Street Fighter II', Art of Fighting), with green, yellow and the
+  shoulders as III to VI, Play as Run, and both shoulders with Play
+  back to the menu. The pad's buttons III-VI are on a second page that
+  the game turns with each CLR pulse, as on the real pad. Other games
+  misread a six-button pad, so it is chosen by how the game reads the
+  pad: twice a frame (one pass per page) for six buttons, once for
+  two. No switch to set, unlike the real pad's 2/6 switch.
+- Joy-Control has four pad types: None, Joystick, CD32 pad and CD32
+  (KTRL+). Joystick reads a third fire button as Run (it was Std
+  Joypad), the 6-button types went into the CD32 ones. Saved settings
+  carry over. As a two-button pad, a CD32 pad's left shoulder is now
+  Select and its right shoulder Run (they were I and II), so a
+  three-button Mega Drive pad on the Mega Multi adapter has Run on C.
+- PadCheck, a small Amiga program in the drawer: it reads the joystick
+  ports as the emulator does in a game, shows what each pad sends, and
+  says which Joy-Control setting to use. Other pad testers go through
+  the OS and show USB pads, which the emulator can't read in a game.
+- PadTest6.pce, a second pad test HuCard that reads the pad as a
+  six-button game does; PadTest.pce reads it as other games do.
+- CD music On/Off: a "CD music" tick in the Sound menu, kept by Save
+  Prefs. Off, a CD game's music is not loaded: it stays silent and
+  takes no Fast RAM (about half the BIN's size), for machines short of
+  RAM. The disc is still read through once; for a quick load use
+  cdshrink. From the next Insert.
+- CD music: a track started without an end position plays to the end
+  of its POSTGAP too, as the gap is part of the track on a disc. Small
+  copies made by cdshrink keep their tracks' full length this way.
+- A game can change the dot clock (VCE) and the VDC's horizontal timing
+  within a frame. Art of Fighting's far view runs the fight at 7 MHz
+  under a 5 MHz status bar: that part is now drawn 3/4 as wide at its
+  own place, as on a TV, and the picture no longer jumps. This fixes
+  the junk at the right of its status bar (2.4 known issue).
+- Known issue: Art of Fighting's zoom between the near and far views is
+  still jerky.
+- Known issue: a file that is not a HuCard (a text file, say) picked
+  as a HuCard can end the emulator and upset a network share.
+
 ## New in 2.4
 
 - Arcade Card (beta): CD games get an Arcade Card, as in the Mesen

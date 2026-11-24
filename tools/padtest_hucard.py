@@ -1,10 +1,16 @@
-"""Build PadTest.pce, a PC Engine pad test HuCard: one line for each PC Engine button with the
-CD32 pad and joystick buttons that drive it (the ReadMe's Joy-Control table) and a box that
-turns green while the game sees the button held. It reads the joypad port $1000 as a game
-does (SEL / CLR), so it tests the whole path: the Amiga port read, the mapping, the emulated
-port. Runs until it is left (Esc). Our own code and font, no third-party data.
+"""Build a PC Engine pad test HuCard: one line for each PC Engine button with the CD32 pad and
+joystick buttons that drive it (the ReadMe's Joy-Control table) and a box that turns green
+while the game sees the button held. It reads the joypad port $1000 as a game does (SEL / CLR),
+so it tests the whole path: the Amiga port read, the mapping, the emulated port. Runs until it
+is left (Esc). Our own code and font, no third-party data.
 
-  python -I tools/padtest_hucard.py OUT.pce
+Two kinds, as games come:
+  two  (PadTest.pce)   reads the pad once a frame, as nearly every game does: a CD32 pad is a
+                       two-button pad (green Select, yellow Run, shoulders Select / Run).
+  six  (PadTest6.pce)  reads it twice a frame, as games for the six-button pad do: a CD32 pad
+                       gives III-VI as well (green, yellow, the shoulders).
+
+  python -I tools/padtest_hucard.py OUT.pce two|six
 """
 import sys
 
@@ -18,6 +24,7 @@ FONT = {   # 5x7, top row first
     '1': ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
     '2': ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
     '3': ['####.', '....#', '....#', '.###.', '....#', '....#', '####.'],
+    '6': ['.###.', '#....', '#....', '####.', '#...#', '#...#', '.###.'],
     'A': ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
     'B': ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
     'C': ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
@@ -86,22 +93,37 @@ def text(row, col, s):
         bat[row * 32 + col + i] = TILE[ch]
 
 
+KIND = sys.argv[2] if len(sys.argv) > 2 else 'six'
+assert KIND in ('two', 'six'), KIND
+SIX = KIND == 'six'
 BOXCOL = 29
-# (row, button, CD32 pad, joystick, register: 0 = SEL high (d-pad), 1 = SEL low (buttons), bit)
-LINES = [(7, 'UP', 'UP', 'UP', 0, 0), (9, 'DOWN', 'DOWN', 'DOWN', 0, 2),
-         (11, 'LEFT', 'LEFT', 'LEFT', 0, 3), (13, 'RIGHT', 'RIGHT', 'RIGHT', 0, 1),
-         (15, 'I', 'BLUE', 'FIRE 2', 1, 0), (17, 'II', 'RED', 'FIRE 1', 1, 1),
-         (19, 'SELECT', 'GREEN', '-', 1, 2), (21, 'RUN', 'YELLOW,PLAY', 'FIRE 3', 1, 3)]
-text(3, 12, 'PAD TEST')
-text(5, 1, 'BUTTON CD32 PAD    JOYSTICK')
+# (row, button, CD32 pad, joystick, register: 0 = SEL high (d-pad), 1 = SEL low (buttons),
+# 2 = a six-button pad's second page (III-VI), bit)
+LINES = [(7, 'UP', 'UP', 'UP', 0, 0), (8, 'DOWN', 'DOWN', 'DOWN', 0, 2),
+         (9, 'LEFT', 'LEFT', 'LEFT', 0, 3), (10, 'RIGHT', 'RIGHT', 'RIGHT', 0, 1),
+         (11, 'I', 'BLUE', 'FIRE 2', 1, 0), (12, 'II', 'RED', 'FIRE 1', 1, 1)]
+if SIX:
+    LINES += [(13, 'SELECT', 'DEL KEY', '-', 1, 2), (14, 'RUN', 'PLAY', 'FIRE 3', 1, 3),
+              (15, 'III', 'GREEN', '-', 2, 0), (16, 'IV', 'YELLOW', '-', 2, 1),
+              (17, 'V', 'L SHLD', '-', 2, 2), (18, 'VI', 'R SHLD', '-', 2, 3)]
+else:
+    LINES += [(13, 'SELECT', 'GREEN/L SHLD', '-', 1, 2), (14, 'RUN', 'YELLOW/R SHLD', 'FIRE 3', 1, 3)]
+text(2, 9, 'PAD TEST ' + ('6-BUTTON' if SIX else '2-BUTTON'))
+text(5, 1, 'BUTTON CD32          JOY')
 for row, name, cd32, joy, reg, bit in LINES:
     text(row, 1, name)
     text(row, 8, cd32)
-    text(row, 20, joy)
+    text(row, 22, joy)
     bat[row * 32 + BOXCOL] = EMPTY
-text(23, 1, 'FIRE 3: STD JOYPAD ONLY')
-text(25, 1, 'HOLD A BUTTON: ITS BOX FILLS')
-text(27, 1, 'ESC: BACK TO THE MENU')
+if SIX:
+    text(20, 1, 'READS THE PAD AS A GAME FOR')
+    text(21, 1, 'THE SIX-BUTTON PAD DOES')
+else:
+    text(16, 1, 'PLAY IS RUN TOO')
+    text(20, 1, 'READS THE PAD AS NEARLY ALL')
+    text(21, 1, 'GAMES DO: III-VI IN PADTEST6')
+text(23, 1, 'HOLD A BUTTON: ITS BOX FILLS')
+text(25, 1, 'ESC: BACK TO THE MENU')
 batbytes = bytearray()
 for w in bat:
     batbytes += bytes([w & 255, w >> 8])
@@ -123,6 +145,7 @@ def lda(a): op(0xAD, a & 255, a >> 8)
 
 
 ZP_PTR, ZP_VBL, ZP_DIR, ZP_BTN = 0x00, 0x02, 0x03, 0x04   # zero page = $2000 (MPR1 = $F8)
+ZP_EXT, ZP_DA, ZP_BA, ZP_DB, ZP_BB = 0x05, 0x06, 0x07, 0x08, 0x09
 VDC_REG, VDC_LO, VDC_HI = 0x0000, 0x0002, 0x0003
 VCE_CTL, VCE_ADL, VCE_ADH, VCE_DL, VCE_DH = 0x0400, 0x0402, 0x0403, 0x0404, 0x0405
 JOY, TIMCTL, IRQMASK = 0x1000, 0x0C01, 0x1402
@@ -174,16 +197,38 @@ op(0x58)                                # cli
 L('main')
 op(0x64, ZP_VBL)                        # stz vbl
 L('wait'); op(0xA5, ZP_VBL); br(0xF0, 'wait')
-lda_i(0x01); sta(JOY); lda_i(0x03); sta(JOY); lda_i(0x01); sta(JOY)   # SEL high, CLR pulse
-op(0xEA, 0xEA, 0xEA, 0xEA)
-lda(JOY); op(0x29, 0x0F, 0x49, 0x0F, 0x85, ZP_DIR)                  # d-pad, 1 = held
-lda_i(0x00); sta(JOY)                                                # SEL low
-op(0xEA, 0xEA, 0xEA, 0xEA)
-lda(JOY); op(0x29, 0x0F, 0x49, 0x0F, 0x85, ZP_BTN)                  # I, II, Select, Run
+
+
+def read_pad(zdir, zbtn):
+    lda_i(0x01); sta(JOY); lda_i(0x03); sta(JOY); lda_i(0x01); sta(JOY)   # SEL high, CLR pulse
+    op(0xEA, 0xEA, 0xEA, 0xEA)
+    lda(JOY); op(0x29, 0x0F, 0x49, 0x0F, 0x85, zdir)                    # d-pad, 1 = held
+    lda_i(0x00); sta(JOY)                                                # SEL low
+    op(0xEA, 0xEA, 0xEA, 0xEA)
+    lda(JOY); op(0x29, 0x0F, 0x49, 0x0F, 0x85, zbtn)                    # I, II, Select, Run
+
+
+# six: two reads a frame. A six-button pad turns its page at each CLR pulse: one of the two reads
+# is its second page, which shows as all four directions low (0000, here $0F) with III-VI as the
+# buttons. A two-button pad gives the same thing twice.
+# two: one read a frame, as an ordinary game; nothing on the second page is looked for.
+read_pad(ZP_DA, ZP_BA)
+if not SIX:
+    op(0xA5, ZP_DA, 0x85, ZP_DIR, 0xA5, ZP_BA, 0x85, ZP_BTN, 0x64, ZP_EXT)
+    absop(0x4C, 'pd')
+read_pad(ZP_DB, ZP_BB)
+op(0xA5, ZP_DB, 0xC9, 0x0F); br(0xD0, 'pa')                         # B the second page?
+op(0xA5, ZP_DA, 0x85, ZP_DIR, 0xA5, ZP_BA, 0x85, ZP_BTN, 0xA5, ZP_BB, 0x85, ZP_EXT)
+br(0x80, 'pd')
+L('pa'); op(0xA5, ZP_DA, 0xC9, 0x0F); br(0xD0, 'p2')                 # A the second page?
+op(0xA5, ZP_DB, 0x85, ZP_DIR, 0xA5, ZP_BB, 0x85, ZP_BTN, 0xA5, ZP_BA, 0x85, ZP_EXT)
+br(0x80, 'pd')
+L('p2'); op(0xA5, ZP_DA, 0x85, ZP_DIR, 0xA5, ZP_BA, 0x85, ZP_BTN, 0x64, ZP_EXT)   # two buttons
+L('pd')
 for n, (row, name, cd32, joy, reg, bit) in enumerate(LINES):
     vreg(0x00, row * 32 + BOXCOL)
     lda_i(0x02); sta(VDC_REG)
-    op(0xA5, ZP_BTN if reg else ZP_DIR, 0x29, 1 << bit)
+    op(0xA5, (ZP_DIR, ZP_BTN, ZP_EXT)[reg], 0x29, 1 << bit)
     br(0xD0, 'f%d' % n); lda_i(EMPTY & 255); br(0x80, 'w%d' % n)
     L('f%d' % n); lda_i(FULL & 255)
     L('w%d' % n); sta(VDC_LO); lda_i(EMPTY >> 8); sta(VDC_HI)

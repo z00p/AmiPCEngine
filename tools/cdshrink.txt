@@ -1,0 +1,80 @@
+cdshrink - PC Engine CD games without the music, for AmiPCEngine
+
+cdshrink makes a small copy of a CD game for AmiPCEngine. The CD music is
+silent in the copy. Sound effects and ADPCM speech stay, as they are in
+the game's data. Speech recorded as a CD audio track goes with the music.
+
+Examples:
+    Valis II              486 MB ->   7 MB
+    Gate of Thunder       533 MB ->  26 MB
+    Rondo of Blood        513 MB ->  41 MB
+    Strider Hiryuu        485 MB -> 102 MB
+    Kabuki Ittouryoudan   613 MB -> 251 MB  (a lot of data on that disc)
+
+
+What you need
+  * A PC, Mac or Linux machine with Python 3.6 or later (python.org).
+    The conversion is done there, not on the Amiga.
+  * The game as .cue with .bin or .iso files. For a .chd you also need
+    chdman, which comes with MAME.
+  * AmiPCEngine 2.5 and the System Card 3.0, as for any CD game.
+
+
+cdshrink.py and this text are in the "PC Tools" drawer of the AmiPCEngine
+archive.
+
+
+Steps (Windows)
+  1. Put cdshrink.py in the folder that holds the game.
+
+  2. Open a command window there: in Explorer, click the address bar,
+     type cmd and press Enter.
+
+  3. Only if the game is a .chd, unpack it first:
+
+       chdman extractcd -i "Game.chd" -o "Game.cue" -ob "Game.bin"
+
+     (Give the full path to chdman.exe if Windows can't find it.)
+
+  4. Make the small copy:
+
+       py cdshrink.py "Game.cue"
+
+     It ends with "1 converted, 0 not converted."
+
+  5. Copy BOTH files from the new "No music" folder (Game.cue and
+     Game.bin) to one drawer on the Amiga.
+
+  6. In AmiPCEngine press Insert, pick Game.cue and play.
+
+On a Mac or Linux step 4 is:
+
+       python3 cdshrink.py "Game.cue"
+
+To convert many games at once give a folder instead of a .cue. Every game
+below it gets its own "No music" folder:
+
+       py cdshrink.py "D:\PC Engine CD"
+
+
+Good to know
+  * Your files are only read. An existing small copy is never overwritten:
+    delete it first to make it again.
+  * Keep the cue's name. AmiPCEngine names the save file after it, so the
+    small copy and the full game then share their saves.
+  * Don't rename the .bin on its own: the .cue names it.
+  * On an Amiga disk that allows only 30 characters in a name, shorten
+    the cue's name BEFORE converting.
+  * Don't just cut the data track out by hand. Games look tracks up by
+    number and position: Gate of Thunder hangs on such a disc. cdshrink
+    keeps every track in its place.
+  * The small copy also loads quicker and needs much less Fast RAM.
+  * WAV, OGG and MP3 tracks are not supported, as in AmiPCEngine itself.
+
+
+Known limits
+  * Played into stage 1 from small copies on a PiStorm A1200 and in
+    WinUAE: Gate of Thunder, Rondo of Blood and Strider Hiryuu (Arcade
+    Card). Other games and later stages are untested.
+  * The small copies are meant for AmiPCEngine. Other emulators and CD
+    writers may not accept them.

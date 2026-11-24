@@ -1320,7 +1320,11 @@ TabGfxPort:				; the menu's order: none (the keyboard), joystick, CD32 pad, joyp
 	DC.L	GBTeclado
 	DC.L	GBJoyStick
 	DC.L	GBCD32
+	IFEQ	NO_SIX
+	DC.L	GBCD32			; CD32 (KTRL+)
+	ELSE
 	DC.L	GBJoypad
+	ENDC
 	IFEQ	NO_CD32KIT
 	DC.L	GBCD32,GBCD32,GBCD32,GBCD32	; KTRL CD32+ (5-7 never come)
 	ENDC
@@ -1427,11 +1431,17 @@ ActuPrefs:
 	MOVE.W	#GD_JoyType,D1		; port 2 (prefs $08 in Juan's order: 0 joystick, 1 none)
 	MOVEQ	#1,D0
 	BSR	GetGadgetValue
+	IFEQ	NO_SIX
+	JSR	PadPrefOut		; the four types back to the saved values
+	ENDC
 	BSR	PortSwap
 	MOVE.B	D0,$08(A5)
 	MOVE.W	#GD_JoyPort,D1		; port 1 (prefs $16 in the menu's order: 0 none, 1 joystick)
 	MOVEQ	#0,D0
 	BSR	GetGadgetValue
+	IFEQ	NO_SIX
+	JSR	PadPrefOut
+	ENDC
 	MOVE.B	D0,$16(A5)
 	MOVE.W	#GD_ScrMode,D1
 	MOVEQ	#0,D0
@@ -1475,6 +1485,10 @@ PonPrefs:
 	ENDC
 	MOVEQ	#0,D0
 	MOVE.B	$08(A5),D0		; port 2
+	IFEQ	NO_SIX
+	BSR	PortSwap
+	JSR	PadPrefIn		; the saved value -> the menu's four types
+	ELSE
 	IFNE	NO_CD32KIT
 	AND.W	#3,D0
 	ELSE
@@ -1484,11 +1498,17 @@ PonPrefs:
 .k2:
 	ENDC
 	BSR	PortSwap
+	ENDC
 	MOVE.L	D0,D2
 	MOVE.W	#GD_JoyType,D0
 	BSR	PonCycle
 	MOVEQ	#0,D2
 	MOVE.B	$16(A5),D2		; port 1
+	IFEQ	NO_SIX
+	MOVE.L	D2,D0
+	JSR	PadPrefIn
+	MOVE.L	D0,D2
+	ELSE
 	IFNE	NO_CD32KIT
 	AND.W	#3,D2
 	ELSE
@@ -1496,6 +1516,7 @@ PonPrefs:
 	BLS.S	.k1
 	MOVEQ	#0,D2
 .k1:
+	ENDC
 	ENDC
 	MOVE.W	#GD_JoyPort,D0
 	BSR	PonCycle
@@ -1566,6 +1587,13 @@ PonPrefs:
 	BEQ.S	.snt
 	LEA	MainMenuNewSnd1+10,A0
 .snt:	BSET	#0,(A0)
+	IFEQ	NO_CDMOFF
+	BCLR	#0,MainMenuNewCdm+10	; CD music: ticked unless prefs $1E says off
+	TST.B	$1E(A5)
+	BNE.S	.cmo
+	BSET	#0,MainMenuNewCdm+10
+.cmo:
+	ENDC
 	IFEQ	NO_TONE
 	BCLR	#0,MainMenuNewTone0+10	; Sound tone: its tick (prefs 0 Soft, 1 Bright, 2 Warm)
 	BCLR	#0,MainMenuNewTone1+10
@@ -2431,7 +2459,11 @@ DirPrefs:
 	DC.L	$00		; $18 - RTG play mode (ModeID, 0 = automatic; RtgModeUse)
 	DC.B	$00		; $1C - Sound (NO_MENU2=0): 0 Original stereo (Paula voices), 1 Full channel mix (the software mix)
 	DC.B	$00		; $1D - Sound tone (NO_MENU2=0): 0 Soft (the default, also for older prefs files), 1 Bright, 2 Warm
-	DC.B	0,0		; $1E
+	IFNE	CdmTest
+	DC.B	1,0		; $1E - CD music (NO_CDMOFF=0): 0 on, 1 off
+	ELSE
+	DC.B	0,0		; $1E - CD music (NO_CDMOFF=0): 0 on, 1 off
+	ENDC
 
 	IFEQ	NO_HOMEDIR
 	DC.B	"PROGDIR:Homebrew"	; $20 - the ROM drawer that comes with the emulator
@@ -3412,6 +3444,10 @@ MenuCartridges:
 MenuSound:
 	DC.L	SndPick0		; Original stereo
 	DC.L	SndPick1		; Full channel mix
+	IFEQ	NO_CDMOFF
+	DC.L	ControlRET		; -----
+	DC.L	CdMusPick		; CD music
+	ENDC
 	IFEQ	NO_TONE
 MenuTone:
 	DC.L	TonePick0		; Bright
@@ -3427,6 +3463,12 @@ SndPick1:
 	MOVE.B	#1,DirPrefs+$1C
 	ST	SndMixWant
 	RTS
+	IFEQ	NO_CDMOFF
+; CdMusPick: the CD music tick (Intuition turns it): prefs $1E 0 = on, 1 = off, from the next Insert.
+CdMusPick:
+	EOR.B	#1,DirPrefs+$1E
+	RTS
+	ENDC
 	IFEQ	NO_TONE
 ; TonePick0-2: Sound tone (prefs $1D: 1 Bright, 0 Soft, 2 Warm), from the next Power ON / Continue.
 TonePick0:

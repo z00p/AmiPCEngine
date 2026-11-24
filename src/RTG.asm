@@ -1485,6 +1485,9 @@ RtgReset:
 	SF	RtgPalNext
 	ENDC
 	MOVE.B	VDP_Regs+(5*2)+1,RtgCRStart
+	IFEQ	NO_DOTMIX
+	BSR	RtgHTTop
+	ENDC
 	CLR.W	RtgW			; geometry unknown: the first frame sets it
 	ST	RtgFull
 	ST	RtgClear
@@ -1595,7 +1598,11 @@ RtgMkCol:
 RtgFrame:
 ; geometry: width from the VDC, the largest integer scale that fits, centred
 	MOVEQ	#0,D0
+	IFEQ	NO_DOTMIX
+	MOVE.B	RtgHTStart+3,D0		; HDW at line 0 (a game may change it in the frame)
+	ELSE
 	MOVE.B	VDP_Regs+(11*2)+1,D0
+	ENDC
 	AND.W	#$7F,D0
 	ADDQ.W	#1,D0
 	LSL.W	#3,D0
@@ -1722,7 +1729,11 @@ RtgFrame:
 	BLE.S	.vo2
 	MOVEQ	#64,D0
 .vo2:	MOVE.W	D0,RtgVoff
+	IFEQ	NO_DOTMIX
+	MOVE.W	RtgHTStart,D0		; horizontal start: HSW + HDS against the
+	ELSE
 	MOVE.W	VDP_Regs+(10*2),D0	; horizontal start: HSW + HDS against the
+	ENDC
 	MOVE.W	D0,D1			; usual 2 + 2 (5 MHz) or 3 + 4 (7 MHz, told
 	AND.W	#$1F,D0			; by the width: no record of the VCE clock)
 	LSR.W	#8,D1
@@ -1731,7 +1742,11 @@ RtgFrame:
 	MOVEQ	#2,D0			; the VCE's own sync each line: as HSW 2 (5 MHz), 3 (7 MHz)
 	ENDC
 	ADD.W	D1,D0
+	IFEQ	NO_DOTMIX
+	MOVE.B	RtgHTStart+3,D1
+	ELSE
 	MOVE.B	VDP_Regs+(11*2)+1,D1
+	ENDC
 	AND.W	#$7F,D1
 	CMP.W	#34,D1
 	BCC.S	.ho7
@@ -1762,6 +1777,9 @@ RtgFrame:
 	MOVE.W	#RTGCRMAX,D0
 .crn:	LSL.W	#2,D0
 	MOVE.W	#$7FFF,(A0,D0.W)	; end mark
+	IFEQ	NO_DOTMIX
+	BSR	RtgHTFrame
+	ENDC
 	IFEQ	NO_RTGPAL
 	BSR	RtgPalStart
 	ENDC
@@ -1812,6 +1830,9 @@ RtgFrame:
 	ADDQ.L	#4,A0
 	BRA.S	.cr
 .cr1:	MOVE.L	A0,RtgCRP
+	IFEQ	NO_DOTMIX
+	BSR	RtgHTLine		; timing writes before this line; a 7 MHz line: RtgW its width
+	ENDC
 	MOVE.L	RtgScrP,A0
 	BTST	#7,RtgCR		; BG on?
 	BEQ.S	.nobg
@@ -1853,7 +1874,14 @@ RtgFrame:
 	SUBQ.W	#1,D0
 .bd:	MOVE.L	D1,(A1)+
 	DBF	D0,.bd
-.out:	BSR	RtgOutLine
+.out:
+	IFEQ	NO_DOTMIX
+	TST.B	RtgWide
+	BEQ.S	.ow
+	BSR	RtgSqueeze		; to the frame's 5 MHz pixels
+.ow:
+	ENDC
+	BSR	RtgOutLine
 	MOVE.W	RtgY,D7
 	ADDQ.W	#1,D7
 	CMP.W	#RTGLINES,D7
@@ -1984,6 +2012,191 @@ RtgCRLog:
 .same:	MOVE.W	VDP_Regs+(5*2),2(A0)
 .x:	MOVEM.L	(SP)+,D0/A0
 	RTS
+
+	IFEQ	NO_DOTMIX
+; The VCE's dot clock (control register bits 0-1: 5, 7 or 10 MHz) and the VDC's
+; R0A/R0B can change within a frame. Art of Fighting runs the status bar at
+; 5 MHz and, in its far view, the fight below at 7 MHz (narrower pixels: more
+; of the stage). A TV line lasts the same at any clock, so a 7 MHz line in a
+; 5 MHz frame is 3/4 as wide and starts at its own place.
+
+; RtgHTTop: line 0 of a PCE frame (PCE.asm) and reset: the timing at the top.
+RtgHTTop:
+	MOVE.L	VDP_Regs+(10*2),RtgHTStart
+	MOVE.B	VceCtl,RtgHTStart+4
+	CLR.W	RtgHTN
+	RTS
+
+; RtgHTLog: a write to VDC R0A/R0B or to the VCE control register (IO.asm, any
+; time): the line it was made on and the timing after it; it shows from the
+; next line. A write on the same line as the last entry replaces it. All
+; registers kept.
+RtgHTLog:
+	MOVEM.L	D0/A0,-(SP)
+	MOVE.W	RtgHTN,D0
+	BEQ.S	.new
+	LEA	RtgHTList,A0
+	LEA	-8(A0,D0.W*8),A0
+	MOVE.W	(A0),D0
+	CMP.W	Regs+ScanLine,D0
+	BEQ.S	.same
+	MOVE.W	RtgHTN,D0
+.new:	CMP.W	#RTGHTMAX,D0
+	BCC.S	.x
+	ADDQ.W	#1,RtgHTN
+	LEA	RtgHTList,A0
+	LEA	(A0,D0.W*8),A0
+	MOVE.W	Regs+ScanLine,(A0)
+.same:	MOVE.L	VDP_Regs+(10*2),2(A0)
+	MOVE.B	VceCtl,6(A0)
+	CLR.B	7(A0)
+.x:	MOVEM.L	(SP)+,D0/A0
+	RTS
+
+; RtgHTFrame: RtgFrame, before the lines.
+RtgHTFrame:
+	MOVE.L	RtgHTStart,RtgHTCur
+	MOVE.W	RtgHTStart+4,RtgHTCur+4
+	LEA	RtgHTList,A0
+	MOVE.L	A0,RtgHTP
+	MOVE.W	RtgHTN,D0
+	MOVE.W	#$7FFF,(A0,D0.W*8)	; end mark
+	SF	RtgWide
+	RTS
+
+; RtgHTLine: D7 = display line. The timing writes made before it; when the
+; frame starts at 5 MHz and this line runs at 7 MHz: RtgW = its width in 7 MHz
+; pixels (RtgWSave the frame's), RtgSqzX = where it starts against the frame's
+; line in 5 MHz pixels, RtgWide set. The start is HDS - 4 characters at 7 MHz
+; and HDS - 2 at 5 MHz from the usual place (as RtgHoff, NO_HSWPOS=0); 8 dots
+; at 7 MHz are 6 pixels at 5 MHz. All registers kept.
+RtgHTLine:
+	MOVEM.L	D0-D2/A0,-(SP)
+	MOVE.L	RtgHTP,A0
+.a:	MOVE.W	(A0),D0
+	CMP.W	D7,D0
+	BGE.S	.a1
+	MOVE.L	2(A0),RtgHTCur
+	MOVE.W	6(A0),RtgHTCur+4
+	ADDQ.L	#8,A0
+	BRA.S	.a
+.a1:	MOVE.L	A0,RtgHTP
+	MOVE.B	RtgHTStart+4,D0
+	AND.B	#3,D0
+	BNE.S	.x			; the frame is not at 5 MHz: as before
+	MOVE.B	RtgHTCur+4,D0
+	AND.B	#3,D0
+	CMP.B	#1,D0
+	BNE.S	.x			; this line is not at 7 MHz
+	MOVEQ	#0,D0
+	MOVE.B	RtgHTCur+3,D0		; HDW
+	AND.W	#$7F,D0
+	ADDQ.W	#1,D0
+	LSL.W	#3,D0
+	CMP.W	#RTGMW,D0
+	BLS.S	.w
+	MOVE.W	#RTGMW,D0
+.w:	MOVE.W	RtgW,RtgWSave
+	MOVE.W	D0,RtgW
+	MOVEQ	#0,D1
+	MOVE.B	RtgHTCur,D1		; HDS at 7 MHz
+	AND.W	#$7F,D1
+	SUBQ.W	#4,D1
+	MULS.W	#6,D1
+	MOVEQ	#0,D2
+	MOVE.B	RtgHTStart,D2		; HDS of the frame at 5 MHz
+	AND.W	#$7F,D2
+	SUBQ.W	#2,D2
+	LSL.W	#3,D2
+	SUB.W	D2,D1
+	MOVE.W	D1,RtgSqzX
+	ST	RtgWide
+.x:	MOVEM.L	(SP)+,D0-D2/A0
+	RTS
+
+; RtgSqueeze: the 7 MHz line in RtgLineB (RtgW pixels) to the frame's width
+; (RtgWSave) in 5 MHz pixels: pixel k shows the 7 MHz pixel under its middle,
+; (4k + 2) / 3, from RtgSqzX on; the border colour around it. RtgW restored.
+RtgSqueeze:
+	MOVEM.L	D0-D7/A0-A1,-(SP)
+	SF	RtgWide
+	LEA	RtgLineB+32,A0
+	LEA	RtgSqzB,A1
+	MOVE.W	RtgW,D0
+	LSR.W	#1,D0
+	SUBQ.W	#1,D0
+.cp:	MOVE.L	(A0)+,(A1)+
+	DBF	D0,.cp
+	MOVEQ	#0,D3
+	MOVE.W	RtgW,D3
+	MULU.W	#3,D3
+	LSR.L	#2,D3			; n: its width in 5 MHz pixels
+	MOVE.W	RtgWSave,D6
+	MOVE.W	D6,RtgW
+	MOVE.W	RtgSqzX,D2
+	LEA	RtgLineB+32,A1
+	MOVE.W	D6,D0
+	LSR.W	#1,D0
+	SUBQ.W	#1,D0
+	MOVE.L	#$01000100,D1
+.f:	MOVE.L	D1,(A1)+
+	DBF	D0,.f
+	MOVEQ	#0,D4			; first k: 0, or -x when it starts left of the frame
+	TST.W	D2
+	BPL.S	.k0
+	MOVE.W	D2,D4
+	NEG.W	D4
+.k0:	MOVE.W	D6,D5
+	SUB.W	D2,D5			; end k: the frame's width - x, at most n
+	CMP.W	D3,D5
+	BLE.S	.k1
+	MOVE.W	D3,D5
+.k1:	SUB.W	D4,D5			; pixels to write
+	BLE.S	.x
+	LEA	RtgSqzB,A0
+	LEA	RtgLineB+32,A1
+	MOVE.W	D2,D7
+	ADD.W	D4,D7
+	LEA	(A1,D7.W*2),A1
+	TST.W	D4
+	BNE.S	.gen
+	MOVEQ	#0,D3			; from k = 0: three pixels of every four
+	MOVE.W	D5,D3
+	DIVU.W	#3,D3
+	MOVE.L	D3,D5
+	SWAP	D5			; and 0-2 more
+	SUBQ.W	#1,D3
+	BMI.S	.g1
+.g:	MOVE.W	(A0)+,(A1)+		; 4m
+	ADDQ.L	#2,A0
+	MOVE.L	(A0)+,(A1)+		; 4m + 2, 4m + 3
+	DBF	D3,.g
+.g1:	SUBQ.W	#1,D5
+	BMI.S	.x
+	MOVE.W	(A0)+,(A1)+
+	SUBQ.W	#1,D5
+	BMI.S	.x
+	MOVE.W	2(A0),(A1)+
+	BRA.S	.x
+.gen:	MOVEQ	#0,D0
+	MOVE.W	D4,D0
+	LSL.L	#2,D0
+	ADDQ.L	#2,D0
+	DIVU.W	#3,D0
+	MOVE.L	D0,D1
+	SWAP	D1			; D0.W = (4k + 2) / 3, D1.W the remainder
+	SUBQ.W	#1,D5
+.s:	MOVE.W	(A0,D0.W*2),(A1)+
+	ADDQ.W	#1,D0			; k + 1: 4/3 further
+	ADDQ.W	#1,D1
+	CMP.W	#3,D1
+	BCS.S	.s1
+	ADDQ.W	#1,D0
+	SUBQ.W	#3,D1
+.s1:	DBF	D5,.s
+.x:	MOVEM.L	(SP)+,D0-D7/A0-A1
+	RTS
+	ENDC
 
 RtgBatW:	DC.W	32,64,128,128,32,64,128,128
 RtgBatH:	DC.W	32,32,32,32,64,64,64,64
@@ -3535,6 +3748,17 @@ CrVis:		DC.B	$C0		; CR bits 6-7 seen in the shown lines of the last finished fra
 	EVEN
 RtgCRN:		DC.W	0
 RtgCRP:		DC.L	0
+	IFEQ	NO_DOTMIX
+RTGHTMAX = 64		; timing writes kept a frame
+RtgHTStart:	DC.W	0,0,0		; R0A, R0B, VCE control (high byte) at line 0
+RtgHTCur:	DC.W	0,0,0		; the same at the line being drawn
+RtgHTN:		DC.W	0
+RtgHTP:		DC.L	0
+RtgWSave:	DC.W	0
+RtgSqzX:	DC.W	0
+VceCtl:		DC.B	0		; the VCE control register ($0400)
+RtgWide:	DC.B	0		; this line is at 7 MHz in a 5 MHz frame
+	ENDC
 RtgStage:	DC.B	0		; (RTGSHOT status) how far the set-up got
 RtgFmtSeen:	DC.B	0
 	EVEN
@@ -3565,6 +3789,10 @@ RtgLineB:	DS.W	16+RTGMW+16	; a line of palette indices (pixel 0 at +32)
 RtgSprLn:	DS.W	32+RTGMW+64	; a line of sprite pixels (pixel 0 at +64)
 RtgSprT:	DS.B	64*16
 RtgCRList:	DS.L	RTGCRMAX+1	; (line, CR) of this frame's CR writes
+	IFEQ	NO_DOTMIX
+RtgHTList:	DS.W	4*(RTGHTMAX+1)	; (line, R0A, R0B, VCE control) of this frame's timing writes
+RtgSqzB:	DS.W	RTGMW		; a 7 MHz line before RtgSqueeze
+	ENDC
 	IFEQ	NO_RTGPAL
 RtgPLog:	DS.W	4*RTGPLMAX	; (line, entry, old, new) of this frame's VCE writes
 	ENDC

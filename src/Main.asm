@@ -66,6 +66,9 @@ NO_CYC455=0
 	IFND	AutoPress	; AutoExit test builds: replay the pad schedule in autopress.i
 AutoPress=0
 	ENDC
+	IFND	SixTest		; AutoPress test builds (NO_SIX=0): player 1 is a six-button pad, III-VI from the schedule (iii, iv, v, vi)
+SixTest=0
+	ENDC
 	IFND	AutoPressHost	; with AutoPress: apply the schedule where the real pad is read (Amiga vblank), not at the PCE frame (lag tests)
 AutoPressHost=0
 	ENDC
@@ -405,6 +408,9 @@ NO_VCELO=0
 	IFND	NO_HSWPOS	; 1 = RTG picture moved by HSW + HDS; 0 = by HDS only: the VCE starts every line with its own sync, so the VDC's HSW does not move it (Strip Fighter II, HSW 16)
 NO_HSWPOS=0
 	ENDC
+	IFND	NO_DOTMIX	; 1 = the RTG/AGC picture placed by the VDC's R0A/R0B when the frame is drawn; 0 = by those at line 0, and a line at 7 MHz (VCE clock, per line) in a 5 MHz frame is squeezed to 3/4 at its own place (Art of Fighting's far view)
+NO_DOTMIX=0
+	ENDC
 	IFND	NO_STIO	; 1 = ST0/ST1/ST2 write through MPR0; 0 = always to the VDC, as the 6280 (Bikkuriman World runs with MPR0 = ROM bank 1)
 NO_STIO=0
 	ENDC
@@ -453,7 +459,25 @@ NO_CD32KIT=0
 	IFND	PadForce	; AutoExit test builds (kit reader): port 1 KTRL CD32+, port 2 CD32 Joypad whatever the prefs; the reads with a CD32 pad's ID bits counted per port into AmiPCE.result
 PadForce=0
 	ENDC
-PadTypes=5-NO_CD32KIT	; pad types in the menu (none, joystick, CD32 pad, joypad, KTRL CD32+)
+	IFND	NO_CDMOFF	; 1 = the CD music always loaded (2.4); 0 = a 'CD music' tick in the Sound menu (prefs $1E, 0 = on): off, the audio tracks are not kept in RAM (silent, much less Fast RAM), from the next Insert
+NO_CDMOFF=0
+	ENDC
+	IFND	CdmTest		; test builds (NO_CDMOFF=0): the prefs start with CD music off
+CdmTest=0
+	ENDC
+	IFND	NO_SIX		; 1 = no six-button pads, the 2.4 pad types; 0 = the menu's four pad types (None, Joystick, CD32 pad, CD32 (KTRL+)), the CD32 ones an Avenue Pad 6 (III-VI on a second page, turned by each rising CLR) for games that read one (IO.asm SixFrame), a two-button pad for the rest
+NO_SIX=0
+	ENDC
+	IFEQ	NO_SIX
+	IFNE	NO_CD32KIT|NO_IOBUF
+	FAIL	NO_SIX=0 needs NO_CD32KIT=0 and NO_IOBUF=0 (and NO_MENU2=0)
+	ENDC
+	ENDC
+	IFEQ	NO_SIX
+PadTypes=4			; pad types in the menu (none, joystick, CD32 pad, CD32 (KTRL+))
+	ELSE
+PadTypes=5-NO_CD32KIT		; pad types in the menu (none, joystick, CD32 pad, joypad, KTRL CD32+)
+	ENDC
 	IFND	NO_CHOOSER	; 1 = the menu's settings stay GadTools cycle gadgets; 0 = chooser.gadget pop-up lists when it opens (OS 3.5 and up), else the cycles
 NO_CHOOSER=0
 	ENDC
@@ -483,6 +507,9 @@ NO_PADORD=0
 	ENDC
 	IFND	NO_REL24	; 1 = 2.3 version texts
 NO_REL24=0
+	ENDC
+	IFND	NO_REL25	; 1 = 2.4 version texts
+NO_REL25=0
 	ENDC
 	IFND	NO_AGAPAL	; 1 = the colour program's AGA screen always NTSC, the Screen gadget ghosted (2.0-2.2); 0 = Screen works on AGA too (PAL: 5/6 speed)
 NO_AGAPAL=0
@@ -681,7 +708,11 @@ NF_Menu:
 	IFEQ	NO_REL22
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
+	IFEQ	NO_REL25
+	DC.B	"$VER:AmiPC-Engine Emulator v2.5 (23.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.4 (21.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.3 (18.11.26)",0,0
 	ENDC
@@ -731,6 +762,17 @@ EmulatorStart:
 	AND.W	#$0003,D0
 	MOVE.L	(PadPrg2,D0.W*4),PadRut2
 	ELSE
+	IFEQ	NO_SIX
+	MOVEQ	#0,D0
+	MOVE.B	$16(A5),D0		; port 1 (the menu's order)
+	JSR	PadPrefIn
+	MOVE.L	(PadPrg1,D0.W*4),PadRut1
+	MOVEQ	#0,D0
+	MOVE.B	$08(A5),D0		; port 2 (Juan's order: 0 joystick, 1 none)
+	JSR	PortSwap
+	JSR	PadPrefIn
+	MOVE.L	(PadPrg2,D0.W*4),PadRut2
+	ELSE
 	MOVEQ	#0,D0
 	MOVE.B	$16(A5),D0		; port 1: 0 none, 1 joystick, 2 CD32 pad, 3 joypad, 4 KTRL CD32+
 	CMP.W	#PadTypes-1,D0
@@ -743,6 +785,7 @@ EmulatorStart:
 	BLS.S	.pt2
 	MOVEQ	#0,D0
 .pt2:	MOVE.L	(PadPrg2,D0.W*4),PadRut2
+	ENDC
 	IFNE	PadForce
 	MOVE.L	#PadKL1,PadRut1
 	MOVE.L	#PadCD2,PadRut2
@@ -1216,6 +1259,9 @@ LateStart:
 	IFNE	AutoPress
 	MOVE.B	AutoPressCur,D1
 	OR.B	D1,JoyX(A3)
+	IFNE	SixTest
+	JSR	AutoSix
+	ENDC
 	ENDC
 	MOVE.W	#$C000,$DFF09A
 	BSR	LsTod
@@ -1719,14 +1765,29 @@ AutoPressBits:				; D1.b = OR of the bits whose frame range holds AutoFrames
 .next:	MOVE.W	(A0)+,D2		; first frame (-1 ends the table)
 	BMI.S	.done
 	MOVE.W	(A0)+,D3		; last frame
-	MOVE.W	(A0)+,D4		; JoyX bits
+	MOVE.W	(A0)+,D4		; JoyX bits, III-VI in bits 8-11
 	CMP.W	D2,D0
 	BCS.S	.next
 	CMP.W	D3,D0
 	BHI.S	.next
-	OR.B	D4,D1
+	OR.W	D4,D1
 	BRA.S	.next
-.done:	RTS
+.done:
+	IFNE	SixTest
+	MOVE.W	D1,AutoPress6		; (the high byte: III-VI)
+	ENDC
+	RTS
+	IFNE	SixTest
+AutoSix:	MOVE.L	D1,-(SP)		; player 1 a six-button pad, its III-VI from the schedule
+	MOVE.B	AutoPress6,D1
+	LSL.B	#4,D1
+	OR.B	#$0F,D1
+	MOVE.B	D1,Joy6
+	ST	Six1
+	MOVE.L	(SP)+,D1
+	RTS
+AutoPress6:	DC.W	0
+	ENDC
 AutoPressCur:	DC.B	0		; bits for the current PCE frame
 	EVEN
 	ENDC
@@ -3274,6 +3335,9 @@ RtgVblMix:
 	ENDC
 	MOVE.B	AutoPressCur,D1		; scheduled pad bits, latched at the start of the PCE frame
 	OR.B	D1,JoyX(A3)
+	IFNE	SixTest
+	JSR	AutoSix
+	ENDC
 	ENDC
 
 ;	MOVE.W	#$0A0,$DFF180
@@ -3905,11 +3969,20 @@ LeePads:
 	CMP.L	#PadKL2,D0
 	BEQ.S	.p2first
 	ENDC
+	IFEQ	NO_SIX
+	CMP.L	#PadC62,D0
+	BEQ.S	.p2first
+	CMP.L	#PadK62,D0
+	BEQ.S	.p2first
+	ENDC
 	BRA.S	.p1first
 .p2first:
 	MOVE.L	D0,A0
 	JSR	(A0)
 	MOVE.B	D3,JoyX(A3)		; port 2 = player 1
+	IFEQ	NO_SIX
+	BSR	SixP1
+	ENDC
 	IFEQ	NO_TAP
 	SF	TapOn
 	ENDC
@@ -3921,6 +3994,9 @@ LeePads:
 	IFEQ	NO_TAP
 	ST	TapOn			; a pad on each port: the tap, port 1 is player 2
 	MOVE.B	D3,TapJoy2
+	IFEQ	NO_SIX
+	BSR	SixP2
+	ENDC
 	ELSE
 	OR.B	D3,JoyX(A3)
 	ENDC
@@ -3937,13 +4013,38 @@ LeePads:
 	BEQ.S	.single
 	ST	TapOn			; a pad on each port: the tap, port 1 is player 2
 	MOVE.B	D3,TapJoy2
+	IFEQ	NO_SIX
+	BSR	SixP2
+	ENDC
 	MOVEQ	#0,D3
 .single:
 	ENDC
 	MOVE.L	PadRut2,A0
 	JSR	(A0)
 	MOVE.B	D3,JoyX(A3)
+	IFEQ	NO_SIX
+	BRA	SixP1
+	ELSE
 	RTS
+	ENDC
+	IFEQ	NO_SIX
+; SixP1/SixP2: D3 bits 8-11 (III-VI) and 15 (a six-button pad) into the player's second page:
+; III-VI in bits 4-7 as JoyX's buttons, bits 0-3 set (that page's directions read 0000).
+SixP1:	MOVE.W	D3,D0
+	LSR.W	#4,D0
+	OR.B	#$0F,D0
+	MOVE.B	D0,Joy6
+	BTST	#15,D3
+	SNE	Six1
+	RTS
+SixP2:	MOVE.W	D3,D0
+	LSR.W	#4,D0
+	OR.B	#$0F,D0
+	MOVE.B	D0,TapJoy6
+	BTST	#15,D3
+	SNE	Six2
+	RTS
+	ENDC
 	CNOP	0,4
 PadRut1:	DC.L	PadNone
 PadRut2:	DC.L	PadJoy2
@@ -3951,8 +4052,31 @@ PadRut2:	DC.L	PadJoy2
 PadPrg1:	DC.L	PadNone,PadJoy1,PadCD1,PadPad1	; port 1 (prefs $16, the menu's order)
 PadPrg2:	DC.L	PadJoy2,PadNone,PadCD2,PadPad2	; port 2 (prefs $08, Juan's order)
 	ELSE
+	IFEQ	NO_SIX
+; The four pad types in the menu's order for both ports: none, joystick (fire 3 = Run), CD32 pad,
+; CD32 pad on the low clock (KTRL CD32+, Mega Multi). The CD32 ones are six-button pads.
+PadPrg1:	DC.L	PadNone,PadPad1,PadC61,PadK61
+PadPrg2:	DC.L	PadNone,PadPad2,PadC62,PadK62
+; PadPrefIn: D0.W = a pad type as saved in the prefs (the menu's order up to 2.4 and the 2.5
+; tests: 0 none, 1 joystick, 2 CD32 pad, 3 joypad, 4 KTRL CD32+, 5 CD32 6-button, 6 KTRL
+; 6-button) -> the menu's four. PadPrefOut is the way back, so older versions still read it.
+PadPrefIn:
+	CMP.W	#6,D0
+	BLS.S	.in
+	MOVEQ	#0,D0
+.in:	MOVE.B	PadInT(PC,D0.W),D0
+	RTS
+PadPrefOut:
+	AND.W	#3,D0
+	MOVE.B	PadOutT(PC,D0.W),D0
+	RTS
+PadInT:		DC.B	0,1,2,1,3,2,3
+PadOutT:	DC.B	0,3,2,4
+	EVEN
+	ELSE
 PadPrg1:	DC.L	PadNone,PadJoy1,PadCD1,PadPad1,PadKL1	; port 1 (prefs $16, the menu's order)
 PadPrg2:	DC.L	PadJoy2,PadNone,PadCD2,PadPad2,PadKL2	; port 2 (prefs $08, Juan's order)
+	ENDC
 	ENDC
 
 PadNone:
@@ -4117,6 +4241,62 @@ PadKit:	BSR	cd32read		; D0 = port 2's buttons, D1 = port 1's (the other is 0)
 	CD32M	5,D3	; right shoulder = button II
 	CD32M	4,D3	; left shoulder = button I
 PadKitX:	RTS			; (a global label: CD32M's own labels end the local ones)
+	IFEQ	NO_SIX
+; A CD32 pad as a six-button pad (Avenue Pad 6). For a game that reads one (SixAuto): blue I,
+; red II, green III, yellow IV, left shoulder V, right shoulder VI, Play Run, Select on the
+; keyboard (Del); both shoulders and Play = back to the menu. For the rest, a two-button pad:
+; blue I, red II, green and the left shoulder Select, yellow, the right shoulder and Play Run;
+; both shoulders = back to the menu. D3 bit 15 marks the pad, bits 8-11 hold III-VI.
+PadC62:	BSR	PadDir2
+	MOVEQ	#2,D0
+	MOVEQ	#0,D1
+	BRA.S	PadKit6
+PadK62:	BSR	PadDir2
+	MOVEQ	#2,D0
+	MOVEQ	#2,D1
+	BRA.S	PadKit6
+PadC61:	BSR	PadDir1
+	MOVEQ	#1,D0
+	MOVEQ	#0,D1
+	BRA.S	PadKit6
+PadK61:	BSR	PadDir1
+	MOVEQ	#1,D0
+	MOVEQ	#1,D1
+PadKit6:	BSR	cd32read
+	OR.L	D1,D0
+	AND.W	#$007F,D0
+	BSET	#15,D3			; a six-button pad, whatever it answers
+	CMP.B	#$7F,D0			; all seven at once: a plain joystick, nothing
+	BEQ	PadKit6X
+	BTST	#6,D0
+	BEQ.S	.np
+	BSET	#7,D3			; Play = Run
+.np:	MOVE.B	D0,D1
+	TST.B	SixAuto
+	BNE.S	PadKit6S
+	AND.B	#$30,D1
+	CMP.B	#$30,D1			; two-button: both shoulders = back to the menu
+	BNE.S	.nm
+	ST	SalirMenu(A3)
+.nm:	CD32M	4,D3	; blue = button I
+	CD32M	5,D3	; red = button II
+	CD32M	7,D3	; yellow = Run
+	CD32M	6,D3	; green = Select
+	CD32M	7,D3	; right shoulder = Run
+	CD32M	6,D3	; left shoulder = Select
+	RTS
+PadKit6S:	AND.B	#$70,D1		; (global: CD32M's labels end the local ones)
+	CMP.B	#$70,D1			; six-button: both shoulders and Play = back to the menu
+	BNE.S	.s
+	ST	SalirMenu(A3)
+.s:	CD32M	4,D3	; blue = button I
+	CD32M	5,D3	; red = button II
+	CD32M	9,D3	; yellow = button IV
+	CD32M	8,D3	; green = button III
+	CD32M	11,D3	; right shoulder = button VI
+	CD32M	10,D3	; left shoulder = button V
+PadKit6X:	RTS
+	ENDC
 	INCLUDE	"CD32Read.asm"
 	ENDC
 	ENDC
