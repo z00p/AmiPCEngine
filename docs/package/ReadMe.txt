@@ -398,9 +398,6 @@ Known faults
   * R-Type on AGA: thin dark streaks under some enemies in places.
     They don't affect play.
   * Art of Fighting: the zoom between the near and far views is jerky.
-  * A file that is not a HuCard (a text file, say) picked as a HuCard
-    can end the emulator and upset a network share. Pick .pce files
-    only.
 
 
 8. History
@@ -423,8 +420,8 @@ Known faults
          Version 1.0 came out on 31 October, 1.1 on 2 November,
          1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November,
          2.0 on 12 November, 2.1 on 14 November, 2.2 on 16
-         November, 2.3 on 18 November, 2.4 on 21 November and 2.5
-         on 23 November.
+         November, 2.3 on 18 November, 2.4 on 21 November, 2.5
+         on 23 November and 2.5.1 on 26 November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -438,7 +435,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 2.5    z00p
+  Versions 1.0 to 2.5.1  z00p
   Web and menu graphics  Multivac
   CD32 pad reading       Afrotechmods / FAmiga
   With thanks to         Zener and Sandman, and reassembler for his
@@ -455,7 +452,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 2.5, by z00p, are community updates
+Entertainment). Versions 1.0 to 2.5.1, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

@@ -205,6 +205,15 @@ VdcLog=0
 	IFND	ScrRing	; test builds (menu): the scroll log of the last 1000 frames (lines, BXR, BYR; AGA split, late, skip) -> PROGDIR:scrring.bin at each return to the menu, and at the end of an AutoExit run (tools/scrring.py)
 ScrRing=0
 	ENDC
+	IFND	VblSlow	; test builds: the vblank interrupt's pad read lasts until this beam line (a slow CD32 pad read)
+VblSlow=0
+	ENDC
+	IFND	AgcFlipLog	; AGC AutoExit test builds: the AGC dump's flag words 58/60 = the latest beam line a flip ended on (1) or the vblank interrupt started on (2), and how many were line $12 or later
+AgcFlipLog=0
+	ENDC
+	IFND	AgcLateTest	; AGC test builds: 1 = every frame counts as late (AgcC2P skips a picture in three, as on a slow machine)
+AgcLateTest=0
+	ENDC
 	IFND	ScrDump	; AutoExit test builds: the scroll log (line, BXR, BYR) of 1000 frames from frame ScrDump -> PROGDIR:scrdump.bin
 ScrDump=0
 	ENDC
@@ -511,6 +520,15 @@ NO_REL24=0
 	IFND	NO_REL25	; 1 = 2.4 version texts
 NO_REL25=0
 	ENDC
+	IFND	NO_REL251	; 1 = 2.5 version texts
+NO_REL251=0
+	ENDC
+	IFND	NO_CARTCHK	; 1 = any file loads as a HuCard (2.5: one under 8 KB got a 128-byte buffer and the read ran past it)
+NO_CARTCHK=0
+	ENDC
+	IFND	NO_FLIPSTAGE	; 1 = AGA chunky mode's flip as in 2.5: AgcPlanePtrs in the vblank interrupt after the sound, pads and keyboard (a slow CD32 pad read on an NTSC screen: the copper took half-new plane pointers and ring jumps, Soldier Blade garbled)
+NO_FLIPSTAGE=0
+	ENDC
 	IFND	NO_AGAPAL	; 1 = the colour program's AGA screen always NTSC, the Screen gadget ghosted (2.0-2.2); 0 = Screen works on AGA too (PAL: 5/6 speed)
 NO_AGAPAL=0
 	ENDC
@@ -561,6 +579,9 @@ MixDump=0
 	ENDC
 	IFND	AdDump	; AutoExit test builds, a CD game: ADPCM state and samples a frame -> PROGDIR:AmiPCE.adp
 AdDump=0
+	ENDC
+	IFND	AuDump	; with AdDump: the CD audio player's state a frame instead (tools/cddasync.py)
+AuDump=0
 	ENDC
 	IFND	MIXFORCE	; test builds: SOUNDMIX without the ToolType / CLI word
 MIXFORCE=0
@@ -709,7 +730,11 @@ NF_Menu:
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
+	IFEQ	NO_REL251
+	DC.B	"$VER:AmiPC-Engine Emulator v2.5.1 (26.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.5 (23.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.4 (21.11.26)",0,0
 	ENDC
@@ -965,6 +990,9 @@ BUC:
 	IFNE	AGC
 	TST.B	vBlankOccurred		; already here: the last frame ran past the vblank (AgcC2P skips a picture)
 	SNE	AgcLate
+	IFNE	AgcLateTest
+	ST	AgcLate
+	ENDC
 .wvb:
 	ENDC
 	TST.B	vBlankOccurred
@@ -3049,6 +3077,15 @@ Inter:
 	IFNE	DbgRows
 	JSR	DbgVblIn
 	ENDC
+	IFEQ	AgcFlipLog-2
+	JSR	AgcBeamLog		; (test builds: the line the interrupt starts on)
+	ENDC
+	IFEQ	NO_FLIPSTAGE|(1-AGC)|NO_RTG
+	TST.B	AgcOn
+	BEQ.S	.afe
+	JSR	AgcFlip			; first: the copper reads the plane pointers and the rings' jumps early in the frame
+.afe:
+	ENDC
 
 ;	MOVE.W	#$A00,$DFF180
 
@@ -3322,6 +3359,19 @@ RtgVblMix:
 	ENDC
 
 
+	IFNE	VblSlow
+	MOVE.L	$DFF004,D0		; (test builds: a pad read this slow, to line VblSlow)
+	LSR.L	#8,D0
+	AND.W	#$1FF,D0
+	CMP.W	#VblSlow,D0
+	BCC.S	.vs1
+.vs0:	MOVE.L	$DFF004,D0
+	LSR.L	#8,D0
+	AND.W	#$1FF,D0
+	CMP.W	#VblSlow,D0
+	BCS.S	.vs0
+.vs1:
+	ENDC
 	JSR	([JoyControlRut.w,PC])
 	BSR	MiraTeclado
 
@@ -3359,10 +3409,12 @@ LsVbl1:
 	ENDC
 	IFNE	AGC
 	IFEQ	NO_RTG
+	IFNE	NO_FLIPSTAGE
 	TST.B	AgcOn
 	BEQ.S	AgcVblX
 	JSR	AgcFlip			; the picture switched at the frame's start
 AgcVblX:
+	ENDC
 	ENDC
 	ENDC
 	ST	vBlankOccurred

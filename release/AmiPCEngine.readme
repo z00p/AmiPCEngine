@@ -27,6 +27,14 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
+New in 2.5.1
+------------
+AGA on an NTSC screen with a CD32 pad: the lower part of the picture
+could be garbled, with streaks past its edges (Soldier Blade from the
+cloud descent on); fixed. A file that is not a HuCard picked as one
+no longer ends the emulator or upsets a network share: it gets
+"Invalid Cartridge!". See CHANGES.txt.
+
 New in 2.5
 ----------
 Six-button pad: a CD32 pad is an Avenue Pad 6 for the games made for
@@ -154,7 +162,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 2.5 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
+1.0 to 2.5.1 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
 Afrotechmods / FAmiga. Thanks to Zener
 and Sandman, and to reassembler for his guidance and direction.
 

@@ -26,6 +26,7 @@ AGCBUF	= AGCPS*8		; one plane buffer (planes one after the other: see AgcPlanePt
 AGCT	= 8*AGCP		; T's range: ring pixels
 AGCVIS	= 232			; lines the display window shows (SetPicTop)
 AGCWRAP	= 24*4			; the rings' copper block at the start of CopperScrolls (AgcPlanePtrs)
+AGCFLIPL = $10			; AgcFlip: the last beam line it copies the copper words on (the copper takes them from $12)
 AGCOVMAX = 64			; colours on register 0 for a frame when every register is in use
 AGCSHB	= 8*AGCPS		; one shadow: a byte for each plane pixel (rings and slacks)
 AGCSHSZ	= 2*AGCSHB		; the two shadows (what each plane buffer shows)
@@ -186,6 +187,10 @@ AgcReset:
 					; panel goes there later)
 	MOVE.W	#1,AgcBack		; buffer 1 (clear) shown, buffer 0 drawn first
 	BSR	AgcPlanePtrs
+	IFEQ	NO_FLIPSTAGE
+	BSR	AgcStgPut
+	SF	AgcDefer
+	ENDC
 	CLR.W	AgcBack
 	MOVEM.L	(SP)+,D0-D1/A0
 	RTS
@@ -600,6 +605,9 @@ AgcC2P:
 	CMP.W	#AGCH,AgcLn
 	BNE	.line
 .end:	BSR	AgcSnap
+	IFEQ	NO_FLIPSTAGE
+	BSR	AgcPlanePtrs		; the copper words for this buffer (AgcFlip copies them)
+	ENDC
 	ST	AgcPend
 	RTS
 .ms:	ADD.L	AgcPsz8,A1		; the group equal: its slack copy too (a new split leaves old pictures there)
@@ -847,11 +855,36 @@ AgcScrKey:
 ; frame, with its colours (AgcSnap). Done from the main loop, a late frame flipped mid-frame: plane pointers,
 ; the ring's wrap block and the buffer then drawn did not match what the beam was showing (garbage on the
 ; PiStorm when frames ran late). Here the buffer AgcC2P draws next is never on screen.
+; The copper words for the picture (AgcPlanePtrs) are worked out by the main loop (end of AgcC2P) and only
+; copied here, first thing in the interrupt: the copper takes the plane pointers soon after line $12 and the
+; rings' jumps from the picture's first line ($1D on NTSC), and worked out here, after the sound and the pads,
+; they missed it (a CD32 pad on NTSC: Soldier Blade's lower picture garbled). A flip that would still be too
+; late (AGCFLIPL) waits for the next frame.
 	CNOP	0,4
 AgcFlip:
 	TST.B	AgcPend
+	IFEQ	(1-NO_FLIPSTAGE)|AgcFlipLog
 	BEQ.S	.x
+	ELSE
+	BEQ	.x
+	ENDC
 	MOVEM.L	D0-D3/A0-A3,-(SP)
+	IFEQ	NO_FLIPSTAGE
+	MOVE.L	$DFF004,D0		; the beam line: the copper takes the plane pointers soon after line $12
+	LSR.L	#8,D0
+	AND.W	#$1FF,D0
+	CMP.W	#AGCFLIPL,D0
+	BCS.S	.in
+	TST.B	AgcDefer		; too late for this frame: the next one (only once: never a picture held back for good)
+	BNE.S	.in
+	ST	AgcDefer
+	IFNE	AutoExit
+	ADDQ.L	#1,AgcDeferN
+	ENDC
+	BRA	.out
+.in:	SF	AgcDefer
+	BSR	AgcStgPut		; first: the copper's plane pointers, fine scroll and ring jumps
+	ENDC
 	TST.B	AgcPendAny
 	BEQ.S	.p
 	SF	AgcPendAny
@@ -874,11 +907,40 @@ AgcFlip:
 .cn:	ADDQ.W	#1,D0
 	CMP.W	#256,D0
 	BNE.S	.c
-.p:	BSR	AgcPlanePtrs
+.p:
+	IFNE	NO_FLIPSTAGE
+	BSR	AgcPlanePtrs
+	ENDC
 	EOR.W	#1,AgcBack
 	SF	AgcPend
-	MOVEM.L	(SP)+,D0-D3/A0-A3
+	IFEQ	AgcFlipLog-1
+	BSR	AgcBeamLog
+	ENDC
+.out:	MOVEM.L	(SP)+,D0-D3/A0-A3
 .x:	RTS
+
+	IFEQ	NO_FLIPSTAGE
+; AgcStgPut: AgcPlanePtrs' staged copper words (worked out by the main loop at the end of AgcC2P) into the copper
+; lists: the plane pointers, BPLCON1 and the rings' block at the start of CopperScrolls.
+AgcStgPut:
+	MOVEM.L	D0/A0-A1,-(SP)
+	LEA	AgcStgPl+2,A0
+	LEA	PLANO+2,A1
+	MOVEQ	#8-1,D0
+.p:	MOVE.W	(A0),(A1)
+	MOVE.W	4(A0),4(A1)
+	ADDQ.L	#8,A0
+	ADDQ.L	#8,A1
+	DBF	D0,.p
+	MOVE.W	AgcStgB1,ScrBits+2
+	LEA	AgcStgCS,A0
+	LEA	CopperScrolls,A1
+	MOVEQ	#AGCWRAP/4-1,D0
+.c:	MOVE.L	(A0)+,(A1)+
+	DBF	D0,.c
+	MOVEM.L	(SP)+,D0/A0-A1
+	RTS
+	ENDC
 
 ; AgcSnap: the end of a conversion, before AgcPend. The colours of the registers that changed for this picture
 ; go to AgcPendRGB for the flip (AgcFlip may come in the middle of the next frame's composing, which changes
@@ -928,7 +990,11 @@ AgcPlanePtrs:
 	BSR	.fo
 	MOVE.L	D0,AgcQO
 	BSR	.con
+	IFEQ	NO_FLIPSTAGE
+	MOVE.W	D1,AgcStgB1		; BPLCON1 from the frame's start
+	ELSE
 	MOVE.W	D1,ScrBits+2		; BPLCON1 from the frame's start
+	ENDC
 	MOVE.W	#AGCH,D2		; ring 1
 	SUB.W	D6,D2
 	MULU.W	#AGCRW,D2
@@ -947,7 +1013,11 @@ AgcPlanePtrs:
 	BEQ.S	.b0
 	ADD.L	#AGCBUF,D0
 .b0:	ADD.L	AgcQO,D0
+	IFEQ	NO_FLIPSTAGE
+	LEA	AgcStgPl+2,A0
+	ELSE
 	LEA	PLANO+2,A0
+	ENDC
 	MOVEQ	#8-1,D1
 .l:	SWAP	D0
 	MOVE.W	D0,(A0)
@@ -986,7 +1056,11 @@ AgcPlanePtrs:
 	SUBQ.W	#1,D0
 	BSR	.ev
 .e2:	MOVE.W	#-1,(A1)
+	IFEQ	NO_FLIPSTAGE
+	LEA	AgcStgCS,A0		; the copper: each jump's modulo, 0 again on the next line
+	ELSE
 	LEA	CopperScrolls,A0	; the copper: each jump's modulo, 0 again on the next line
+	ENDC
 	LEA	AgcEv,A1
 	MOVEQ	#0,D5			; past line 255 yet
 	MOVE.W	PicTop,D4
@@ -1004,7 +1078,12 @@ AgcPlanePtrs:
 .cx:	TST.B	D5
 	BNE.S	.cp
 	MOVE.L	#$FFDFFFFE,(A0)+	; past line 255 for what follows (the debug panel)
-.cp:	LEA	CopperScrolls+AGCWRAP,A1
+.cp:
+	IFEQ	NO_FLIPSTAGE
+	LEA	AgcStgCS+AGCWRAP,A1
+	ELSE
+	LEA	CopperScrolls+AGCWRAP,A1
+	ENDC
 .pd:	CMP.L	A1,A0
 	BCC.S	.x
 	MOVE.L	#$01FE0000,(A0)+	; (no-ops)
@@ -1190,8 +1269,13 @@ AgcDumpWrite:
 	MOVE.L	#PantGfx+8,AgcDFlg+48	; (plane buffer 0's address: the copper's pointers against it)
 	MOVE.L	AgcYbB,AgcDFlg+52	; (both buffers' splits)
 	MOVE.W	AgcYb,AgcDFlg+56
+	IFNE	AgcFlipLog
+	MOVE.W	AgcFlipMax,AgcDFlg+58
+	MOVE.L	AgcFlipLate,AgcDFlg+60
+	ELSE
 	CLR.W	AgcDFlg+58
 	MOVE.L	AgcLayN,AgcDFlg+60
+	ENDC
 	MOVE.L	#AgcDFlg,D2
 	MOVEQ	#64,D3
 	BSR	.w
@@ -1209,6 +1293,23 @@ AgcDumpWrite:
 .w:	MOVE.L	D4,D1
 	JMP	-48(A6)			; Write
 
+	IFNE	AgcFlipLog
+; AgcBeamLog: the beam line now (D0 trashed): the latest one seen, and how many were line $12 or later (PLANO)
+AgcBeamLog:
+	MOVE.L	$DFF004,D0
+	LSR.L	#8,D0
+	AND.W	#$1FF,D0
+	CMP.W	#$12,D0
+	BCS.S	.l0
+	ADDQ.L	#1,AgcFlipLate
+.l0:	CMP.W	AgcFlipMax,D0
+	BLS.S	.l1
+	MOVE.W	D0,AgcFlipMax
+.l1:	RTS
+	CNOP	0,4
+AgcFlipLate:	DC.L	0
+AgcFlipMax:	DC.W	0
+	ENDC
 AgcDName:	DC.B	"PROGDIR:AmiPCE.agc",0
 	EVEN
 AgcDHdr:	DC.B	"AGC1"

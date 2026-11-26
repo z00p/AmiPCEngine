@@ -4,6 +4,19 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.5.1
+
+- AGA: on an NTSC screen with a CD32 pad, the lower part of the
+  picture could be drawn from the wrong memory, with streaks past
+  its edges (Soldier Blade from the cloud descent on). The new
+  picture's display settings were still being written while the
+  copper was reading them. They are now worked out ahead and put in
+  place first thing in the frame.
+- A file that is not a HuCard (a text file, say) picked as a HuCard
+  no longer ends the emulator or upsets a network share: a file
+  smaller than one 8 KB bank gets "Invalid Cartridge!", and a short
+  ROM with a copier header no longer overruns its buffer.
+
 ## New in 2.5
 
 - cdshrink, in the new PC Tools drawer: a Python script for a PC, Mac
@@ -49,7 +62,8 @@ user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 - Known issue: Art of Fighting's zoom between the near and far views is
   still jerky.
 - Known issue: a file that is not a HuCard (a text file, say) picked
-  as a HuCard can end the emulator and upset a network share.
+  as a HuCard can end the emulator and upset a network share (fixed
+  in 2.5.1).
 
 ## New in 2.4
 

@@ -2035,6 +2035,42 @@ CdMixAdX:	RTS
 ; Test builds: a record a PCE frame (24 bytes: AutoFrames.l, AdRead, AdOut, AdMag, AdPlay.b, AdNib.b,
 ; AdRate.b, AdCtl.b, AdLen.l, AuCapN, AdCapN, MixN), then the frame's AdCapN ADPCM samples.
 AdDumpFrame:
+	IFNE	AuDump
+; AuDump: 36 bytes a PCE frame: AutoFrames.l, AuStart.l, AuEnd.l, AuSector.l, AuSeek.l,
+; AuSmp.w, AuStat.b, AuEndB.b, AuCapN.w, MixN.w, the frame's last captured sample (L.w, R.w),
+; a VRAM fingerprint.l (sum over words w of (w + 1) * (both bytes), as tools/mesen_vramsig.lua).
+	MOVE.L	AdDumpPtr,A1
+	LEA	36(A1),A0
+	CMP.L	#AdDumpEnd,A0
+	BCC.S	.ax
+	MOVE.L	AutoFrames,(A1)+
+	MOVE.L	AuStart,(A1)+
+	MOVE.L	AuEnd,(A1)+
+	MOVE.L	AuSector,(A1)+
+	MOVE.L	AuSeek,(A1)+
+	MOVE.W	AuSmp,(A1)+
+	MOVE.B	AuStat,(A1)+
+	MOVE.B	AuEndB,(A1)+
+	MOVE.W	AuCapN,D0
+	MOVE.W	D0,(A1)+
+	MOVE.W	MixN,(A1)+
+	LEA	AuCapB,A0
+	MOVE.L	(A0,D0.W*4),(A1)+
+	LEA	VRAM+65536,A0
+	MOVEQ	#0,D1
+	MOVEQ	#0,D2
+	MOVE.W	#32768-1,D3
+.vs:	MOVEQ	#0,D0
+	MOVE.B	-(A0),D0
+	ADD.L	D0,D1
+	MOVE.B	-(A0),D0
+	ADD.L	D0,D1
+	ADD.L	D1,D2
+	DBF	D3,.vs
+	MOVE.L	D2,(A1)+
+	MOVE.L	A1,AdDumpPtr
+.ax:	RTS
+	ELSE
 	MOVE.L	AdDumpPtr,A1
 	MOVEQ	#0,D0
 	MOVE.W	AdCapN,D0
@@ -2062,6 +2098,7 @@ AdDumpFrame:
 .c:	DBF	D0,.l
 	MOVE.L	A1,AdDumpPtr
 .x:	RTS
+	ENDC
 AdDumpWrite:				; OS alive again
 	MOVEM.L	D0-D7/A0-A6,-(SP)
 	MOVE.L	$4.W,A6

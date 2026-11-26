@@ -800,6 +800,12 @@ SiStcComp:
 EsXpkFile:
 	MOVE.W	D0,PagCart
 	MULU	#$2080,D0		; 8Kb x page
+	IFEQ	NO_CARTCHK
+	CMP.L	BucFile(PC),D0		; a file longer than its whole banks (a short ROM with a 512-byte header,
+	BCC.S	.cartFits		; an odd tail): the read below takes all of it, so the buffer holds all of it
+	MOVE.L	BucFile(PC),D0
+.cartFits:
+	ENDC
 	ADD.L	#$0080,D0
 	MOVE.L	D0,-(SP)
 
@@ -1072,6 +1078,10 @@ MiraCartSize:
 	LSR.L	#5,D0
 ;	CMP.L	#$40,D0			; mira máximo 4Mb
 ;	BGT.S	NoOkCartCon
+	IFEQ	NO_CARTCHK
+	TST.L	D0			; not one whole 8 KB bank: no HuCard (a text file, an icon)
+	BEQ.S	NoOkCartCon
+	ENDC
 	MOVEQ	#-1,D1
 	RTS
 NoOkCartCon:

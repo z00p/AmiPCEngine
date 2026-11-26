@@ -901,7 +901,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
+	IFEQ	NO_REL251
+    DC.B    'AmiPC-Engine Emulator v2.5.1'
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5'
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.4'
 	ENDC
@@ -941,7 +945,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
+	IFEQ	NO_REL251
+    DC.B    'AmiPC-Engine Emulator v2.5.1'
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5'
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.4'
 	ENDC
@@ -2036,7 +2044,11 @@ AboutIText0:
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
+	IFEQ	NO_REL251
+    DC.B    'AmiPC-Engine Emulator v2.5.1',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.4',0
 	ENDC
@@ -2075,7 +2087,11 @@ AboutIText1:
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
+	IFEQ	NO_REL251
+    DC.B    '(26 November 2026)',0
+	ELSE
     DC.B    '(23 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(21 November 2026)',0
 	ENDC
@@ -2114,7 +2130,11 @@ AboutITextZ:
 	IFEQ	NO_REL23
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
+	IFEQ	NO_REL251
+    DC.B    'Version 2.5.1: z00p',0
+	ELSE
     DC.B    'Version 2.5: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 2.4: z00p',0
 	ENDC

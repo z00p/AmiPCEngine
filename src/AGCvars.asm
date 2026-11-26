@@ -37,6 +37,16 @@ AgcPKY:		DC.W	0,0	; ... last frame's
 AgcPKX:		DC.W	0,0
 AgcQYb:		DC.W	0	; AgcPlanePtrs: the shown buffer's split,
 AgcQC1:		DC.W	0	; ... ring 1's BPLCON1
+	IFEQ	NO_FLIPSTAGE
+AgcStgB1:	DC.W	0	; AgcPlanePtrs' staged copper words (AgcStgPut): BPLCON1,
+AgcDefer:	DC.B	0	; ... a flip put off to the next frame (AgcFlip),
+	EVEN
+AgcStgPl:	DS.W	8*4	; ... the plane pointers (PLANO's layout),
+AgcStgCS:	DS.B	AGCWRAP	; ... the rings' block
+	IFNE	AutoExit
+AgcDeferN:	DC.L	0	; flips put off (test builds)
+	ENDC
+	ENDC
 AgcEv:		DS.W	8	; ... the jumps (line, modulo), -1 at the end
 AgcCOff:	DC.W	0	; this conversion's groups: chunky bytes to the first in a line,
 AgcCLen:	DC.W	0	; ... chunky bytes of them,
