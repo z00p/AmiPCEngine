@@ -64,8 +64,13 @@ Double-click one of the icons in the AmiPCEngine drawer:
                    NTSC (60 Hz) unless Screen says PAL.
   RTG              the same program with the ToolType RTG: the picture
                    goes to a Picasso96 screen (for example a PiStorm's
-                   HDMI output). The menu opens there too, at double
-                   height, so no 15 kHz screen is needed.
+                   HDMI output). The menu opens there too, so no
+                   15 kHz screen is needed: on a 1920x1080 Picasso96
+                   mode (else 1280x720) at that size, with a large
+                   font and redrawn pictures; without those modes at
+                   double height. The line Menu = Classic in a text
+                   file AmiPCEngine.config in the drawer gives the
+                   menu as before.
 
 Up to 1.4 the program was called AmiPCEngine and its RTG icon
 AmiPCEngine RTG. If you unpack 2.0 over 1.4, delete those two icons
@@ -105,8 +110,6 @@ ToolTypes (in the icon's Information window):
              CD games: the CD music's level in the sound mix, as a
              percentage of the disc's own level, 0 to 400. The
              default is 200. Loud tracks may clip at 200 or more.
-  SOUNDMIX   start with the Sound menu on Full channel mix (see
-             section 4), over the saved prefs.
   PLAINNTSC  on a PAL Amiga, the NTSC screen is the chipset's own
              NTSC frame, as in 2.1: games run 0.9% slow. Without it
              (the default) the program sets up a 262-line frame at
@@ -118,7 +121,6 @@ From a Shell: AGA RTG   (the word RTG, as the ToolType)
               AGA RTG SCANLINES=50
               AGA RTG RTGMODE=800x600
               AGA CDMUSIC=150
-              AGA SOUNDMIX
 
 Starting a game straight away (from a Shell, a script or a game
 launcher such as Lupa):
@@ -197,9 +199,12 @@ Cartridges     Insert Cartridge, Eject Cartridge.
 Sound menu     how the PC Engine's six sound channels are played (see
                Sound in section 7), from the next Power ON or
                Continue.
-               Original stereo   the channels share Paula's four
-                                 voices (the default).
-               Full channel mix  all six through a software mix.
+               Centred in both speakers
+                                 ticked (the default): a HuCard's
+                                 centred channel also plays on a free
+                                 voice on the other side, so it is
+                                 heard in the middle. Not ticked: in
+                                 one speaker only, as in 2.5.1.
                CD music          ticked (the default): a CD game's
                                  music is loaded with the disc. Not
                                  ticked: the CD music is left out,
@@ -207,15 +212,15 @@ Sound menu     how the PC Engine's six sound channels are played (see
                                  sound effects and ADPCM speech stay.
                                  From the next Insert of a .cue.
 Tone menu      Bright (unfiltered), Soft (4.5 kHz), Warm (A1200
-               filter): Soft, the default, cuts the treble of the
-               Full channel mix a little; Warm turns on the Amiga's
+               filter): Soft, the default, cuts the treble of a CD
+               game's sound mix a little; Warm turns on the Amiga's
                own audio filter (the one tied to the power light)
-               while a game plays, in either mode. On Original
-               Stereo, Soft sounds as Bright.
+               while a game plays, HuCard or CD. On a HuCard, Soft
+               sounds as Bright.
 
 Save Prefs keeps the Screen, Display (the RTG mode), Scanlines,
-Joy-Control, Sound (with CD music) and Tone settings and the drawer
-the requester was last in.
+Joy-Control, Sound (Centred in both speakers, CD music) and Tone
+settings and the drawer the requester was last in.
 
 On OS 3.5 and later (chooser.gadget) the Screen, Display, Scanlines
 and port settings open a list to pick from. Without chooser.gadget,
@@ -369,22 +374,23 @@ Not supported (there is no code for them)
     emulator sees (section 5).
 
 Sound
-  Original stereo (the default): six PSG channels play on the Amiga's
-  four, each with the game's own waveform at its pitch, volume and
-  balance. Noise (drums, explosions) and DDA samples (voices and drums
-  in Soldier Blade and Parodius Da!) are played. Limits:
-  * Amiga channels are hard left or right, so a centred PC Engine
-    channel comes out of one side.
+  HuCards: six PSG channels play on the Amiga's four voices, each with
+  the game's own waveform at its pitch, volume and balance, and the
+  LFO's vibrato. Noise (drums, explosions) and DDA samples (voices and
+  drums in Soldier Blade and Parodius Da!) are played. Limits:
+  * Amiga voices are hard left or right. A centred PC Engine channel
+    also takes a free voice on the other side, so it is heard in the
+    middle (Sound menu, Centred in both speakers); while all four
+    voices are busy it comes out of one side.
   * With five or six channels playing, the loudest three keep a voice
     each and the others are mixed in software onto the fourth, so no
     note goes missing.
-  Full channel mix (Sound menu, or SOUNDMIX): all six channels mixed
+  CD games: all six channels, the CD music and ADPCM speech are mixed
   in software at 22 kHz and played in 14 bits, centred channels in
-  the middle, as CD games always play. The level is set
-  automatically, with a soft limiter on the loudest peaks. It costs
-  some speed, so try Original stereo on a slow Amiga.
-  * No LFO (channel 2 is silent while it is on); no tones above about
-    14 kHz.
+  the middle. The level is set automatically, with a soft limiter on
+  the loudest peaks.
+  * No LFO in the mix (channel 2 is silent while it is on); no tones
+    above about 14 kHz.
   * DDA samples are played a frame or two late. On a PAL screen they
     play about 1/6 low, like the game. Below full speed they are
     stretched (up to 1.5x), and then break up.
@@ -421,7 +427,8 @@ Known faults
          1.2 on 3 November, 1.3 on 4 November, 1.4 on 9 November,
          2.0 on 12 November, 2.1 on 14 November, 2.2 on 16
          November, 2.3 on 18 November, 2.4 on 21 November, 2.5
-         on 23 November and 2.5.1 on 26 November.
+         on 23 November, 2.5.1 on 26 November and 2.6 on 28
+         November.
 
 In short, the changes from v0.5: the HuC6280 timer, the right CPU
 speed, many game fixes, a new sound engine, an RTG screen and a faster
@@ -435,7 +442,7 @@ replaced the latter in 2020 and stays on Aminet as it is.
 9. Credits
 ----------
   AmiPC-Engine           Juan Antonio Gomez Galvez (GUS Entertainment)
-  Versions 1.0 to 2.5.1  z00p
+  Versions 1.0 to 2.6    z00p
   Web and menu graphics  Multivac
   CD32 pad reading       Afrotechmods / FAmiga
   With thanks to         Zener and Sandman, and reassembler for his
@@ -452,7 +459,7 @@ PC Engine is a trademark of NEC and Hudson Soft, and TurboGrafx-16 of
 NEC. This program is not affiliated with or endorsed by them.
 
 AmiPCEngine is freeware by Juan Antonio Gomez Galvez (GUS
-Entertainment). Versions 1.0 to 2.5.1, by z00p, are community updates
+Entertainment). Versions 1.0 to 2.6, by z00p, are community updates
 made and published with his permission.
 
 Please report a game that misbehaves with its name, whether you used

@@ -156,7 +156,11 @@ MixChan:
 	CMP.L	(MixGainNow.L,D6.W*4),D2
 	BEQ.S	.same
 	MOVE.L	D2,(MixGainNow.L,D6.W*4)
+	IFNE	MIXFINE
+	BSR	MixMakeLevelsF		; the box table holds levels, not values: no rebuild
+	ELSE
 	ST	(MixStale.L,D6.W)
+	ENDC
 	BSR	MixMakeLevels
 .same:	TST.B	(PSGDdaHad.L,D6.W)
 	BNE	MixDda
@@ -193,18 +197,33 @@ MixChan:
 	IFNE	MIXV2&1
 	MOVEQ	#19,D3
 	LSR.L	D3,D0			; wave steps a sample, 8.8
+	IFNE	MIXFINE
+	TST.W	D0
+	BNE.S	.sp
+	MOVEQ	#1,D0			; every note through the box, however low
+	ELSE
 	CMP.W	#256,D0
 	BCC.S	.sp
 	MOVEQ	#0,D0			; under one step a sample: nearest step
+	ENDC
 .sp:	CMP.W	(MixSpan.L,D6.W*2),D0
 	BEQ.S	.inc
 	MOVE.W	D0,(MixSpan.L,D6.W*2)
 	ST	(MixStale.L,D6.W)
 	ENDC
-.inc:	LEA	MixWaveT,A3
+.inc:
+	IFNE	MIXFINE
+	LEA	MixAvgT,A3
+	MOVE.W	D6,D0
+	LSL.W	#8,D0
+	ADD.W	D0,D0
+	ADD.W	D0,A3			; A3 = this channel's 256 box levels
+	ELSE
+	LEA	MixWaveT,A3
 	MOVE.W	D6,D0
 	LSL.W	#7,D0
 	ADD.W	D0,A3			; A3 = this channel's wave steps
+	ENDC
 	TST.B	(PSGWaveDirty.L,D6.W)
 	BNE.S	.make
 	TST.B	(MixStale.L,D6.W)
@@ -231,9 +250,25 @@ MixChan:
 .play:	LEA	MixBuf,A1
 	MOVE.L	(MixPhase.L,D6.W*4),D1
 	MOVE.L	(MixInc.L,D6.W*4),D2
-	MOVEQ	#11,D4
 	MOVE.W	MixN,D7
 	SUBQ.W	#1,D7
+	IFNE	MIXFINE
+	LEA	MixLevelF,A2
+	MOVE.W	D6,D0
+	LSL.W	#8,D0
+	LSL.W	#2,D0
+	ADD.W	D0,A2			; this channel's 249 levels
+	MOVEQ	#8,D4			; 1/8 step: 256 table entries a wave
+.l:	MOVE.L	D1,D0
+	SWAP	D0
+	LSR.W	D4,D0
+	ADD.L	D2,D1
+	MOVE.W	(A3,D0.W*2),D3		; the box level, x 4
+	MOVE.L	(A2,D3.W),D3
+	ADD.L	D3,(A1)+
+	DBF	D7,.l
+	ELSE
+	MOVEQ	#11,D4
 .l:	MOVE.L	D1,D0
 	SWAP	D0
 	LSR.W	D4,D0
@@ -241,6 +276,7 @@ MixChan:
 	MOVE.L	(A3,D0.W*4),D3
 	ADD.L	D3,(A1)+
 	DBF	D7,.l
+	ENDC
 	MOVE.L	D1,(MixPhase.L,D6.W*4)
 .ret:	RTS
 
@@ -259,6 +295,10 @@ MixSide:
 	ADD.W	#60,D0
 	ADD.W	D1,D0			; attenuation, 1.5 dB steps
 	MOVE.W	(SP)+,D4
+	IFEQ	NO_MIXMUTE
+	CMP.W	#31,D0
+	BCC.S	.z			; 31 steps and more: silent (the chip's 5-bit sum)
+	ENDC
 	MOVE.W	(MixGain.L,D0.W*2),D2
 	RTS
 .z0:	MOVE.W	(SP)+,D4
@@ -304,6 +344,103 @@ MixMakeLevels:
 ; on: MixSpan(D6) steps in 8.8, k whole steps and a fraction of the next. Prefix
 ; sums give the k steps, a reciprocal the division. (2 * avg - 31) * gain / 256 a
 ; side, as MixMakeLevels. A box filter: high notes no longer alias. Keeps all.
+	IFNE	MIXFINE
+; MIXFINE: the box starts where the output sample does, to 1/8 step: entry j of
+; the table (A3, 256 words) is the wave's average over [j/8, j/8 + span] in
+; eighths of a level, x 4 (a byte offset into MixLevelF). Rebuilt when the wave
+; or the span changes, not the volume. Keeps all.
+MixMakeBox:
+	MOVEM.L	D0-D7/A1-A3,-(SP)
+	LEA	MixPre,A1
+	MOVEQ	#0,D0
+	MOVE.W	D0,(A1)+
+	MOVEQ	#0,D1
+	MOVEQ	#64-1,D7
+.p:	MOVEQ	#31,D2
+	AND.W	D1,D2
+	MOVEQ	#0,D3
+	MOVE.B	(A0,D2.W),D3
+	ADD.W	D3,D0
+	MOVE.W	D0,(A1)+
+	ADDQ.W	#1,D1
+	DBF	D7,.p
+	MOVEQ	#0,D5
+	MOVE.W	(MixSpan.L,D6.W*2),D5	; span, 8.8
+	MOVE.L	#$1000000,D4
+	DIVU.L	D5,D4			; 2^24 / span
+	LEA	MixPre,A1
+	MOVEQ	#0,D1			; start, 8.8: 32 an entry
+.b:	MOVE.W	D1,D0
+	BSR.S	MixInteg
+	MOVE.L	D3,D6
+	MOVE.W	D1,D0
+	ADD.W	D5,D0
+	BSR.S	MixInteg
+	SUB.L	D6,D3			; the sum over the span, x 256
+	MULU.L	D4,D3
+	SWAP	D3			; the average, 8.8
+	ADD.W	#16,D3
+	LSR.W	#5,D3			; in eighths
+	LSL.W	#2,D3
+	MOVE.W	D3,(A3)+
+	ADD.W	#32,D1
+	CMP.W	#32*256,D1
+	BNE.S	.b
+	MOVEM.L	(SP)+,D0-D7/A1-A3
+	RTS
+
+; D0.w = x (wave steps, 8.8), A0 = wave, A1 = its prefix sums -> D3.l = the
+; wave's integral from 0 to x, x 256. Uses D0, D2.
+MixInteg:
+	MOVEQ	#0,D2
+	MOVE.W	D0,D2
+	LSR.W	#8,D2
+	MOVEQ	#0,D3
+	MOVE.W	(A1,D2.W*2),D3
+	LSL.L	#8,D3
+	AND.W	#31,D2
+	MOVE.B	(A0,D2.W),D2
+	AND.W	#$FF,D0
+	MULU.W	D2,D0
+	ADD.L	D0,D3
+	RTS
+
+; D2 = gains, D6 = channel: MixLevelF, 249 levels in eighths,
+; (level / 4 - 31) * gain / 256 each side, as MixMakeLevels. Keeps all.
+MixMakeLevelsF:
+	MOVEM.L	D0-D7/A0,-(SP)
+	LEA	MixLevelF,A0
+	MOVE.W	D6,D0
+	LSL.W	#8,D0
+	LSL.W	#2,D0
+	ADD.W	D0,A0
+	MOVE.L	D2,D4
+	MOVEQ	#0,D5
+	MOVE.W	D4,D5			; right gain
+	CLR.W	D4
+	SWAP	D4			; left gain
+	MOVE.L	D4,D0
+	MULU.W	#124,D0
+	NEG.L	D0
+	MOVE.L	D5,D1
+	MULU.W	#124,D1
+	NEG.L	D1
+	MOVEQ	#10,D6
+	MOVE.W	#249-1,D3
+.l:	MOVE.L	D0,D2
+	ASR.L	D6,D2
+	SWAP	D2
+	CLR.W	D2
+	MOVE.L	D1,D7
+	ASR.L	D6,D7
+	ADD.L	D7,D2
+	MOVE.L	D2,(A0)+
+	ADD.L	D4,D0
+	ADD.L	D5,D1
+	DBF	D3,.l
+	MOVEM.L	(SP)+,D0-D7/A0
+	RTS
+	ELSE
 MixMakeBox:
 	MOVEM.L	D0-D7/A1-A3,-(SP)
 	LEA	MixPre,A1
@@ -363,6 +500,7 @@ MixMakeBox:
 	BNE.S	.b
 	MOVEM.L	(SP)+,D0-D7/A1-A3
 	RTS
+	ENDC
 
 ; Test builds, HuCards: MixBuf (L * 65536 + R at half scale) -> L, R words. A
 ; one-pole high-pass per side (about 7 Hz) takes out DC, the block's peak sets the
@@ -929,6 +1067,10 @@ MixDumpPtr:	DC.L	MixDumpBuf
 MixBuf:		DS.L	446+4		; a block, L * 65536 + R, then L, R
 MixLevel:	DS.L	6*32		; per channel: value of each of the 32 levels
 MixWaveT:	DS.L	6*32		; per channel: value of each wave step
+	IFNE	MIXFINE
+MixAvgT:	DS.W	6*256		; per channel: the box level at each 1/8 step, x 4
+MixLevelF:	DS.L	6*256		; per channel: value of each level in eighths (249)
+	ENDC
 MixGainNow:	DS.L	6		; the gains MixLevel was made for
 MixPhase:	DS.L	6
 MixInc:		DS.L	6

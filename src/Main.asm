@@ -259,6 +259,9 @@ NO_AGAVDW=0
 	IFND	NO_TALLMENU	; 1 = the menu on a 424+ line RTG mode at AGA's 640x212 layout (flat, in the top of the picture)
 NO_TALLMENU=0
 	ENDC
+	IFND	NO_BIGMENU	; 1 = no big RTG menu; 0 = the menu on RTG opens at 1920x1080 (then 1280x720) with the shared kit's Pixel font and hi-res pictures (BigMenu.asm), "Menu = Classic" in PROGDIR:AmiPCEngine.config for the menu as before
+NO_BIGMENU=0
+	ENDC
 	IFND	NO_SCRLO	; 1 = R7/R8 logged only on the high byte, and a BXR change reloads the BG row (HuZERO's per-line BXR lost)
 NO_SCRLO=0
 	ENDC
@@ -291,6 +294,9 @@ NO_ROMMAP=0
 	ENDC
 	IFND	NO_BLENDLV	; 1 = one Blended scanline setting, quarter + quarter rounded down (no Blended light / strong)
 NO_BLENDLV=0
+	ENDC
+	IFND	NO_BLENDTRUNC	; 1 = the Blended halves rounded to nearest, (m v + 4) / 8 (2.5.1); 0 = rounded down, m v / 8, as the other emulators
+NO_BLENDTRUNC=0
 	ENDC
 	IFND	NO_SF2	; 1 = no Street Fighter II' mapper: a card over 1 MB fills DirMappers past its end
 NO_SF2=0
@@ -368,6 +374,43 @@ NO_PSGOVER=0
 PSGNSTR=7		; sample streams: six DDA channels and the shared voice
 	ELSE
 PSGNSTR=6
+	ENDC
+	IFND	NO_SHNORM	; 1 = the shared voice's sum carries the channels' volumes in its samples and plays at volume 64 (2.5.1: quiet channels get 3-5 bits); 0 = the sum is scaled to the full 8 bits and Paula's volume (the channels' volumes summed, 64 at most) sets the level, as on an own voice (measured: no gain in Blazing Lazers, so off)
+NO_SHNORM=1
+	ENDC
+ShNormOff=NO_SHNORM|NO_PSGOVER|NO_DDAQUEUE
+	IFND	NO_PSGROUND	; 1 = the Paula period drops its fraction (up to 0.8% sharp near the minimum period, 2.5.1); 0 = rounded to the nearest count
+NO_PSGROUND=0
+	ENDC
+	IFND	NO_PSGSIDE	; 1 = a channel keeps the voice it got even when its balance moves to the other side (2.5.1); 0 = it moves to a free voice on its new side
+NO_PSGSIDE=0
+	ENDC
+	IFND	NO_PSGTWIN	; 1 = a centred channel plays on one Paula voice, so one speaker (2.5.1); 0 = it also takes a free voice on the other side, both restarted together (on unless the Sound menu's tick is off, NO_TWINTICK)
+NO_PSGTWIN=0
+	ENDC
+	IFND	NO_TWINBUSY	; 1 = a twin can go to a channel whose DDA stream is still playing out its queue after the DDA bit went off (Twin Tick 525: two voices then take turns on one queue, garbled drums in Blazing Lazers); 0 = not
+NO_TWINBUSY=0
+	ENDC
+	IFND	NO_SHCONT	; 1 = the shared voice always makes 264 samples, also when its buffer is queued 262 long to drain (2.5.1: every summed tone jumps 2 samples on, ~24 times a second); 0 = it makes as many as are played
+NO_SHCONT=0
+	ENDC
+	IFND	NO_SHPITCH	; 1 = the shared voice (5th and 6th channels summed) takes Paula's clock for the PAL one only on a PAL screen (2.4-2.5.1, Twin Tick 525: 16 cents flat against the other voices on the A1200 on RTG and NTSC screens); 0 = always, as the other voices
+NO_SHPITCH=0
+	ENDC
+	IFND	NO_PSGLFO	; 1 = no LFO: channel 0 plays steady (2.5.1); 0 = channel 1's wave bends channel 0's frequency once a frame (vibrato; LFOs over ~1/4 wave a frame left out)
+NO_PSGLFO=0
+	ENDC
+	IFND	NO_LFOWRAP	; 1 = the LFO's bend of channel 0 held at 1..$FFF (2.5.1); 0 = a 12-bit sum that wraps past 0 or $FFF, 0 = $1000 (deep mode 3 bends reach the lowest notes)
+NO_LFOWRAP=0
+	ENDC
+	IFND	NO_MIXMUTE	; 1 = the Full mix plays 31 and more 1.5 dB steps of attenuation, very quietly (2.5.1); 0 = 31 steps and more are silent, the chip's 5-bit sum
+NO_MIXMUTE=0
+	ENDC
+	IFND	NO_PSGSTAY	; 1 = a new note may take an older channel's voice when five or six play, and a centred channel goes to the first free voice (2.5.1); 0 = playing channels keep their voices while sharing, and a centred channel goes back to the side it last played on
+NO_PSGSTAY=0
+	ENDC
+	IFND	PSGSTAYB	; the score a playing channel gets to keep its voice while sharing: enough to win a tie with a new note at the same volume (the new-note bonus is at most 24, the voice-owner bonus 20), not enough to keep a quieter note in front of a louder new one
+PSGSTAYB=5
 	ENDC
 	IFND	NO_PSGSTICK	; 1 = a channel that has a Paula voice keeps it with a bonus of 6 (Paula volume units); 0 = 20, so channels change speaker less often
 NO_PSGSTICK=0
@@ -474,6 +517,9 @@ NO_CDMOFF=0
 	IFND	CdmTest		; test builds (NO_CDMOFF=0): the prefs start with CD music off
 CdmTest=0
 	ENDC
+	IFND	TwinTest	; test builds: the twin starts off (EMBED builds have no menu or prefs; with a menu the prefs decide)
+TwinTest=0
+	ENDC
 	IFND	NO_SIX		; 1 = no six-button pads, the 2.4 pad types; 0 = the menu's four pad types (None, Joystick, CD32 pad, CD32 (KTRL+)), the CD32 ones an Avenue Pad 6 (III-VI on a second page, turned by each rising CLR) for games that read one (IO.asm SixFrame), a two-button pad for the rest
 NO_SIX=0
 	ENDC
@@ -523,6 +569,9 @@ NO_REL25=0
 	IFND	NO_REL251	; 1 = 2.5 version texts
 NO_REL251=0
 	ENDC
+	IFND	NO_REL26	; 1 = 2.5.1 version texts
+NO_REL26=0
+	ENDC
 	IFND	NO_CARTCHK	; 1 = any file loads as a HuCard (2.5: one under 8 KB got a 128-byte buffer and the read ran past it)
 NO_CARTCHK=0
 	ENDC
@@ -568,6 +617,10 @@ AdGain=13
 	IFND	MIXV2		; the software mix: box-filtered wave steps; HuCards also get an automatic gain (x0.5 to x4, 3 dB steps), a soft knee and a DC filter
 MIXV2=3			; bit 0: the box filter, bit 1: the output stage
 	ENDC
+	IFND	NO_MIXFINE	; 1 = the box filter starts at whole wave steps and notes under ~695 Hz are not filtered (2.5.1); 0 = it starts at 1/8 step, every note, so the 32-step wave aliases far less
+NO_MIXFINE=0
+	ENDC
+MIXFINE	= (MIXV2&1)*(1-NO_MIXFINE)
 	IFND	CdMusDef	; CD music level in the mix without CDMUSIC=: 512 = full scale (the disc's own level), 1024 = twice (the default)
 CdMusDef=1024
 	ENDC
@@ -587,6 +640,14 @@ AuDump=0
 MIXFORCE=0
 	ENDC
 MixOff=NO_SNDOUT|NO_PSGMIX|DdaTickOff|NO_RTG	; the mix needs all of these
+	IFND	NO_MIXCUT	; 1 = a HuCard can play through the mix: the Sound menu's Full channel mix, the ToolType / CLI word SOUNDMIX (2.5.1); 0 = that choice is gone, HuCards play on Paula's voices (CD games still go through the mix, and MIXFORCE test builds)
+NO_MIXCUT=0
+	ENDC
+HuMixOff=MixOff|(1-NO_MIXCUT)
+	IFND	NO_TWINTICK	; 1 = the centred twin is a build switch only (NO_PSGTWIN); 0 = the Sound menu's tick 'Centred in both speakers' turns it off and on (prefs $1F: 0 on, the default and older prefs files, 1 off)
+NO_TWINTICK=0
+	ENDC
+TwinTickOff=NO_TWINTICK|NO_PSGTWIN|NO_PSG6|NO_MENU2|MixOff
 	IFND	NO_TONE		; 1 = no Sound tone (2.2: the mix as made, the Amiga's audio filter always off); 0 = the Sound menu's tone,
 NO_TONE=0		; prefs $1D: Soft (0, a 4.5 kHz low-pass on the PSG mix), Bright (1, none), Warm (2, the Amiga's own audio filter on)
 	ENDC
@@ -609,6 +670,7 @@ ScanOff=NO_SCANLINES|NO_RTG|NO_RTGFIX	; the scanline code is in RTG.asm (needs t
 SCANDEF=0
 	ENDC
 TallOff=NO_TALLMENU|NO_RTG|NO_RTGFIX	; the tall menu code is in RTG.asm
+BigOff=NO_BIGMENU|TallOff	; the big RTG menu (BigMenu.asm) draws through the tall menu's Tall* helpers
 DispOff=NO_MENU2|NO_RTG|NO_RTGFIX	; the menu's Display gadget (AGA / RTG for each Power ON): code in RTG.asm
 OcsRtgOff=NO_OCSRTG|DispOff	; an Amiga without AGA runs on RTG (Menu.asm ChipAga, RTG.asm RtgStart)
 ChoosOff=NO_CHOOSER|NO_MENU2	; the menu's settings as chooser.gadget pop-ups (Menu.asm, GadToolsBox.asm)
@@ -731,7 +793,11 @@ NF_Menu:
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
 	IFEQ	NO_REL251
+	IFEQ	NO_REL26
+	DC.B	"$VER:AmiPC-Engine Emulator v2.6 (28.11.26)",0,0
+	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.5.1 (26.11.26)",0,0
+	ENDC
 	ELSE
 	DC.B	"$VER:AmiPC-Engine Emulator v2.5 (23.11.26)",0,0
 	ENDC
@@ -3337,8 +3403,8 @@ gemmy:
 
 
 	IFNE	OnlyAGA
-	IFNE	AGC
-	JSR	PonePaleta_AGA		; (AGC.asm in the hunk: out of BSR range)
+	IFNE	AGC|DbgRows|PSGLog
+	JSR	PonePaleta_AGA		; (AGC.asm or DbgRows.asm or the PSG log in the hunk: out of BSR range)
 	ELSE
 	BSR	PonePaleta_AGA
 	ENDC
@@ -5381,6 +5447,9 @@ GameCart2End:
 
 	IFEQ	NO_RTG
 	INCLUDE	"RTG.asm"	; own sections: code, data, BSS
+	IFEQ	BigOff
+	INCLUDE	"BigMenu.asm"	; own sections: the big RTG menu
+	ENDC
 	IFNE	AGC
 	INCLUDE	"AGCvars.asm"
 	ENDC

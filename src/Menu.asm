@@ -417,6 +417,9 @@ BucleMenu:
 	BSR	CloseMainMenuWindow
 ; ------------------------------------------
 Quitar:	JSR	CloseDownScreen
+	IFEQ	BigOff
+	JSR	bm_exit			; the big RTG menu: its font and pictures
+	ENDC
 ; ------------------------------------------=> Quit
 	MOVEQ	#0,D0	; Salir Sín Errores
 
@@ -1585,6 +1588,7 @@ PonPrefs:
 	ENDC
 	ENDC
 	IFEQ	MixOff
+	IFEQ	HuMixOff
 	TST.B	SndMixWant		; the ToolType / CLI word SOUNDMIX: start on the mix
 	BEQ.S	.snd
 	MOVE.B	#1,$1C(A5)
@@ -1597,6 +1601,15 @@ PonPrefs:
 	BEQ.S	.snt
 	LEA	MainMenuNewSnd1+10,A0
 .snt:	BSET	#0,(A0)
+	ENDC
+	IFEQ	TwinTickOff
+	BCLR	#0,MainMenuNewTwin+10	; Centred in both speakers: ticked unless prefs $1F says off
+	TST.B	$1F(A5)
+	SEQ	PSGTwinOn
+	BNE.S	.two
+	BSET	#0,MainMenuNewTwin+10
+.two:
+	ENDC
 	IFEQ	NO_CDMOFF
 	BCLR	#0,MainMenuNewCdm+10	; CD music: ticked unless prefs $1E says off
 	TST.B	$1E(A5)
@@ -2467,12 +2480,12 @@ DirPrefs:
 
 	DC.B	$00		; $17 - Display (NO_MENU2=0: 0 AGA, else RTG)
 	DC.L	$00		; $18 - RTG play mode (ModeID, 0 = automatic; RtgModeUse)
-	DC.B	$00		; $1C - Sound (NO_MENU2=0): 0 Original stereo (Paula voices), 1 Full channel mix (the software mix)
+	DC.B	$00		; $1C - Sound (NO_MENU2=0, NO_MIXCUT=1): 0 Original stereo (Paula voices), 1 Full channel mix (the software mix)
 	DC.B	$00		; $1D - Sound tone (NO_MENU2=0): 0 Soft (the default, also for older prefs files), 1 Bright, 2 Warm
 	IFNE	CdmTest
-	DC.B	1,0		; $1E - CD music (NO_CDMOFF=0): 0 on, 1 off
+	DC.B	1,0		; $1E - CD music (NO_CDMOFF=0): 0 on, 1 off; $1F - Centred in both speakers (NO_TWINTICK=0): 0 on, 1 off
 	ELSE
-	DC.B	0,0		; $1E - CD music (NO_CDMOFF=0): 0 on, 1 off
+	DC.B	0,0		; $1E - CD music (NO_CDMOFF=0): 0 on, 1 off; $1F - Centred in both speakers (NO_TWINTICK=0): 0 on, 1 off
 	ENDC
 
 	IFEQ	NO_HOMEDIR
@@ -3452,10 +3465,17 @@ MenuCartridges:
 	DC.L	Eject			; Eject  Cartridge
 	IFEQ	MixOff
 MenuSound:
+	IFEQ	HuMixOff
 	DC.L	SndPick0		; Original stereo
 	DC.L	SndPick1		; Full channel mix
+	ENDC
+	IFEQ	TwinTickOff
+	DC.L	TwinPick		; Centred in both speakers
+	ENDC
 	IFEQ	NO_CDMOFF
+	IFEQ	HuMixOff&TwinTickOff
 	DC.L	ControlRET		; -----
+	ENDC
 	DC.L	CdMusPick		; CD music
 	ENDC
 	IFEQ	NO_TONE
@@ -3464,6 +3484,7 @@ MenuTone:
 	DC.L	TonePick1		; Soft
 	DC.L	TonePick2		; Warm
 	ENDC
+	IFEQ	HuMixOff
 ; SndPick0/1: the Sound menu (Intuition moves the tick). The next Power ON / Continue, kept by Save Prefs.
 SndPick0:
 	CLR.B	DirPrefs+$1C
@@ -3473,6 +3494,14 @@ SndPick1:
 	MOVE.B	#1,DirPrefs+$1C
 	ST	SndMixWant
 	RTS
+	ENDC
+	IFEQ	TwinTickOff
+; TwinPick: the 'Centred in both speakers' tick (Intuition turns it): prefs $1F 0 = on, 1 = off, from the next Power ON / Continue.
+TwinPick:
+	EOR.B	#1,DirPrefs+$1F
+	SEQ	PSGTwinOn
+	RTS
+	ENDC
 	IFEQ	NO_CDMOFF
 ; CdMusPick: the CD music tick (Intuition turns it): prefs $1E 0 = on, 1 = off, from the next Insert.
 CdMusPick:

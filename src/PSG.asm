@@ -116,7 +116,7 @@ PSG_Hack:
 ;
 ; Tone: the PSG steps through its 32 samples at 3.58 MHz / F (F = 12-bit
 ; frequency, 0 = 4096), so the Paula period for the 32-byte loop is
-; F * 3546895 / 3579545 (PAL Paula clock). Below Paula's minimum period
+; F * 3546895 / 3579545 (PAL Paula clock), rounded. Below Paula's minimum period
 ; (124) the loop steps through a 16/8/4/2-sample copy of the wave (pairs
 ; averaged) at 2/4/8/16 x the period; tones above ~14 kHz are muted.
 ; Volume: attenuation in 1.5 dB steps = (31 - volume) + 2*(15 - balance)
@@ -143,6 +143,17 @@ PSGReset:
 	CLR.W	PSGLfo
 	IFEQ	NO_PSG6
 	MOVE.L	#-1,PSGVoiceOwner
+	IFEQ	NO_PSGSTAY
+	CLR.L	PSGChSide
+	CLR.W	PSGChSide+4
+	ENDC
+	IFEQ	NO_PSGTWIN
+	CLR.L	PSGVoiceTwin
+	MOVEQ	#6-1,D0
+.twi:	ST	(PSGTwinLast.L,D0.W)
+	DBF	D0,.twi
+	SF	PSGTwinNew
+	ENDC
 	ENDC
 	IFEQ	NO_PSGDDA
 	BSR	PSGDdaReset
@@ -290,6 +301,30 @@ PSGUpdate:
 .next:	ADDQ.W	#1,D7
 	CMP.W	#4,D7
 	BNE.S	.voice
+	IFEQ	NO_PSGTWIN
+	MOVEQ	#0,D0
+	MOVE.B	PSGTwinNew,D0
+	BEQ.S	.tx
+	SF	PSGTwinNew
+	MOVE.W	D0,$96(A6)		; a new pair: both voices' DMA off
+	MOVEQ	#0,D1			; the longest period among them
+	MOVEQ	#3,D2
+.tm:	BTST	D2,D0
+	BEQ.S	.tm2
+	CMP.W	(PSGVoicePer.L,D2.W*2),D1
+	BCC.S	.tm2
+	MOVE.W	(PSGVoicePer.L,D2.W*2),D1
+.tm2:	DBF	D2,.tm
+	LSR.W	#7,D1			; Paula stops at the end of its current sample:
+	ADDQ.W	#2,D1			; one period (227 colour clocks a line) and a margin
+.tl:	MOVE.B	$6(A6),D2		; VHPOSR line
+.tw:	CMP.B	$6(A6),D2
+	BEQ.S	.tw
+	DBF	D1,.tl
+	OR.W	#$8000,D0
+	MOVE.W	D0,$96(A6)		; on together: both start the wave at sample 0
+.tx:
+	ENDC
 	RTS
 	ELSE
 	MOVEQ	#0,D7			; Paula voice = PSG channel 0-3
@@ -307,7 +342,10 @@ PSGUpdate:
 ; it already has a voice (so near-equal channels do not swap voices every
 ; frame). The 4 best channels with a score keep or get a voice; a new one
 ; takes a free voice on its side (Paula voices 0/3 left, 1/2 right) when
-; its balance leans one way. Uses D0-D6/A0-A2.
+; its balance (channel and master) leans one way, and a tone channel whose
+; balance has moved to the other side gives its voice up and is placed
+; again. A centred tone channel also takes a free voice on the other side
+; (a twin), so it is heard in both speakers. Uses D0-D6/A0-A2.
 PSGAllocate:
 	MOVEQ	#0,D6
 .score:	BSR	PSGChScore
@@ -323,7 +361,12 @@ PSGAllocate:
 	CMP.W	#6,D6
 	BNE.S	.score
 	MOVEQ	#3,D0			; voice owners get the bonus
-.bonus:	MOVEQ	#0,D1
+.bonus:
+	IFEQ	NO_PSGTWIN
+	TST.B	(PSGVoiceTwin.L,D0.W)
+	BNE.S	.nob			; a channel's second voice: no second bonus
+	ENDC
+	MOVEQ	#0,D1
 	MOVE.B	(PSGVoiceOwner.L,D0.W),D1
 	BMI.S	.nob
 	IFEQ	NO_PSGOVER
@@ -350,6 +393,25 @@ PSGAllocate:
 	BLS.S	.lim
 	MOVEQ	#3,D0			; five or six: three direct, the rest shared
 .lim:	MOVE.W	D0,PSGOvLim
+	IFEQ	NO_PSGSTAY
+	CMP.W	#3,D0
+	BNE.S	.nost
+	MOVEQ	#3,D0			; sharing: a channel that has a voice keeps it against a
+.stay:	MOVEQ	#0,D1			; new note as loud, which joins the shared voice
+	MOVE.B	(PSGVoiceOwner.L,D0.W),D1
+	BMI.S	.stn
+	CMP.B	#6,D1
+	BEQ.S	.stn
+	IFEQ	NO_PSGTWIN
+	TST.B	(PSGVoiceTwin.L,D0.W)
+	BNE.S	.stn
+	ENDC
+	TST.W	(PSGScore.L,D1.W*2)
+	BEQ.S	.stn
+	ADD.W	#PSGSTAYB,(PSGScore.L,D1.W*2)
+.stn:	DBF	D0,.stay
+.nost:
+	ENDC
 	ENDC
 	MOVEQ	#0,D6			; rank: channels ahead of this one
 .rank:	MOVE.W	(PSGScore.L,D6.W*2),D1
@@ -396,7 +458,19 @@ PSGAllocate:
 	BNE.S	.shr
 	ENDC
 	MOVEQ	#3,D0			; voices whose channel lost its place are freed
-.drop:	MOVEQ	#0,D1
+.drop:
+	IFEQ	NO_PSGTWIN
+	TST.B	(PSGVoiceTwin.L,D0.W)
+	BEQ.S	.notw
+	SF	(PSGVoiceTwin.L,D0.W)	; twins only get what is left over: freed
+	MOVEQ	#0,D1			; here, taken again below if still free
+	MOVE.B	(PSGVoiceOwner.L,D0.W),D1
+	MOVE.B	D0,(PSGTwinLast.L,D1.W)
+	ST	(PSGVoiceOwner.L,D0.W)
+	BRA	.nod
+.notw:
+	ENDC
+	MOVEQ	#0,D1
 	MOVE.B	(PSGVoiceOwner.L,D0.W),D1
 	BMI.S	.nod
 	IFEQ	NO_PSGOVER
@@ -412,13 +486,39 @@ PSGAllocate:
 	BNE.S	.keep
 	ST	(PSGVoiceOwner.L,D0.W)
 	BRA.S	.nod
-.keep:	SF	(PSGPick.L,D1.W)	; placed already
+.keep:
+	IFEQ	NO_PSGSIDE
+	MOVE.B	(PSGPan.L,D1.W),D2
+	BEQ.S	.kept			; centred: any side will do
+	BTST	#6,(PSGBuffer+4.L,D1.W*8)
+	BNE.S	.kept			; a DDA stream keeps its voice (and its queue)
+	MOVE.W	D0,D3			; voices 0/3 left, 1/2 right
+	SUBQ.W	#1,D3
+	CMP.W	#2,D3
+	SCS	D3			; -1 = right voice
+	EXT.W	D2			; -1 left, 1 right
+	BPL.S	.wantr
+	TST.B	D3
+	BEQ.S	.kept			; leans left, on a left voice
+	BRA.S	.move
+.wantr:	TST.B	D3
+	BNE.S	.kept			; leans right, on a right voice
+.move:	ST	(PSGVoiceOwner.L,D0.W)	; placed again below, on its side
+	BRA.S	.nod
+.kept:
+	ENDC
+	SF	(PSGPick.L,D1.W)	; placed already
 .nod:	DBF	D0,.drop
 	MOVEQ	#0,D6			; new channels into free voices
 .place:	TST.B	(PSGPick.L,D6.W)
 	BEQ.S	.nextp
 	LEA	PSGSideC(PC),A0
 	MOVE.B	(PSGPan.L,D6.W),D0
+	IFEQ	NO_PSGSTAY
+	BNE.S	.lean
+	MOVE.B	(PSGChSide.L,D6.W),D0	; centred: the side it played on last
+.lean:
+	ENDC
 	BEQ.S	.try
 	LEA	PSGSideL(PC),A0
 	BMI.S	.try
@@ -436,7 +536,7 @@ PSGAllocate:
 	BNE.S	.place
 	IFEQ	NO_PSGOVER
 	TST.B	PSGOvN
-	BEQ.S	.ovx
+	BEQ	.ovx
 	MOVEQ	#3,D0
 .ovh:	CMP.B	#6,(PSGVoiceOwner.L,D0.W)
 	BEQ.S	.ovx			; it has one
@@ -451,6 +551,20 @@ PSGAllocate:
 .ovs2:	ADDQ.W	#1,D6
 	CMP.W	#6,D6
 	BNE.S	.ovs
+	IFEQ	NO_PSGSTAY
+	TST.W	D0
+	BNE.S	.ovl
+	MOVEQ	#0,D6			; centred: the side its channels played on last
+.ovc:	TST.B	(PSGShare.L,D6.W)
+	BEQ.S	.ovc2
+	MOVE.B	(PSGChSide.L,D6.W),D1
+	EXT.W	D1
+	ADD.W	D1,D0
+.ovc2:	ADDQ.W	#1,D6
+	CMP.W	#6,D6
+	BNE.S	.ovc
+.ovl:
+	ENDC
 	LEA	PSGSideC(PC),A0
 	TST.W	D0
 	BEQ.S	.ovt
@@ -466,6 +580,94 @@ PSGAllocate:
 	BRA.S	.ovx
 .ovu:	DBF	D2,.ovv
 .ovx:
+	ENDC
+	IFEQ	NO_PSGTWIN
+	IFEQ	TwinTickOff
+	TST.B	PSGTwinOn
+	BEQ	.twe			; the Sound menu's tick is off
+	ENDC
+	MOVEQ	#0,D6			; twins: centred tone channels with a voice
+.tw:	TST.W	(PSGScore.L,D6.W*2)
+	BEQ	.twn
+	TST.B	(PSGPan.L,D6.W)
+	BNE	.twn			; leans one way
+	BTST	#6,(PSGBuffer+4.L,D6.W*8)
+	BNE	.twn			; DDA: one queue, one voice
+	IFEQ	NO_TWINBUSY|NO_PSGDDA|NO_DDAQUEUE
+	BSR	PSGDdaBusy		; (uses D0)
+	BNE	.twn			; a DDA stream still playing out its queue (the DDA bit already off): the same
+	ENDC				; queue on two voices would play every other buffer on each
+	CMP.W	#4,D6
+	BCS.S	.twt
+	TST.B	(PSGBuffer+7.L,D6.W*8)
+	BMI	.twn			; noise: a new stretch every frame, one voice
+.twt:	MOVEQ	#3,D0			; the channel's voice
+.twf:	CMP.B	(PSGVoiceOwner.L,D0.W),D6
+	DBEQ	D0,.twf
+	BNE	.twn			; none
+	LEA	PSGTwinR(PC),A0		; voices 0/3 left, 1/2 right: the other side
+	MOVE.W	D0,D1
+	SUBQ.W	#1,D1
+	CMP.W	#2,D1
+	BCC.S	.tws
+	LEA	PSGTwinL(PC),A0
+.tws:	MOVEQ	#0,D1
+	MOVE.B	(PSGTwinLast.L,D6.W),D1	; last frame's twin, if still free: no restart
+	BMI.S	.twa
+	CMP.B	(A0),D1
+	BEQ.S	.twl
+	CMP.B	1(A0),D1
+	BNE.S	.twa
+.twl:	TST.B	(PSGVoiceOwner.L,D1.W)
+	BMI.S	.twk
+.twa:	MOVE.B	(A0)+,D1
+	TST.B	(PSGVoiceOwner.L,D1.W)
+	BMI.S	.twg
+	MOVE.B	(A0),D1
+	TST.B	(PSGVoiceOwner.L,D1.W)
+	BPL.S	.twn			; the other side is full
+.twg:	MOVEQ	#0,D2			; a new pair: PSGUpdate restarts both together
+	BSET	D0,D2
+	BSET	D1,D2
+	OR.B	D2,PSGTwinNew
+.twk:	MOVE.B	D6,(PSGVoiceOwner.L,D1.W)
+	ST	(PSGVoiceTwin.L,D1.W)
+.twn:	ADDQ.W	#1,D6
+	CMP.W	#6,D6
+	BNE	.tw
+.twe:	MOVEQ	#6-1,D0
+.twc:	ST	(PSGTwinLast.L,D0.W)
+	DBF	D0,.twc
+	ENDC
+	IFEQ	NO_PSGSTAY
+	MOVEQ	#3,D0			; each channel's side, for next time
+.sd:	MOVEQ	#0,D1
+	MOVE.B	(PSGVoiceOwner.L,D0.W),D1
+	BMI.S	.sdn
+	IFEQ	NO_PSGTWIN
+	TST.B	(PSGVoiceTwin.L,D0.W)
+	BNE.S	.sdn
+	ENDC
+	MOVEQ	#1,D2			; voices 1/2 right, 0/3 left
+	MOVE.W	D0,D3
+	SUBQ.W	#1,D3
+	CMP.W	#2,D3
+	BCS.S	.sdr
+	MOVEQ	#-1,D2
+.sdr:
+	IFEQ	NO_PSGOVER
+	CMP.B	#6,D1
+	BNE.S	.sdc
+	MOVEQ	#6-1,D3			; the shared voice: all its channels
+.sdl:	TST.B	(PSGShare.L,D3.W)
+	BEQ.S	.sdm
+	MOVE.B	D2,(PSGChSide.L,D3.W)
+.sdm:	DBF	D3,.sdl
+	BRA.S	.sdn
+.sdc:
+	ENDC
+	MOVE.B	D2,(PSGChSide.L,D1.W)
+.sdn:	DBF	D0,.sd
 	ENDC
 	RTS
 
@@ -547,6 +749,14 @@ PSGChScore:
 	MOVE.B	D0,D3
 	LSR.B	#4,D3			; left
 	AND.B	#$0F,D0			; right
+	IFEQ	NO_PSGSIDE
+	MOVE.B	PSGMaster,D4		; and the master balance
+	MOVE.B	D4,D5
+	LSR.B	#4,D5
+	ADD.B	D5,D3
+	AND.B	#$0F,D4
+	ADD.B	D4,D0
+	ENDC
 	CMP.B	D0,D3
 	BEQ.S	.done
 	SHI	D2			; left louder: -1
@@ -557,6 +767,10 @@ PSGChScore:
 PSGSideC:	DC.B	0,1,2,3
 PSGSideL:	DC.B	0,3,1,2
 PSGSideR:	DC.B	1,2,0,3
+	IFEQ	NO_PSGTWIN
+PSGTwinL:	DC.B	0,3
+PSGTwinR:	DC.B	1,2
+	ENDC
 PSGVoiceOwner:	DC.B	-1,-1,-1,-1	; PSG channel per Paula voice, -1 = free
 PSGScore:	DS.W	6
 	IFNE	PSGFAIR
@@ -618,6 +832,17 @@ PSGNoteAge:	DS.B	6
 	ENDC
 PSGPan:		DS.B	6
 PSGPick:	DS.B	6
+	IFEQ	NO_PSGSTAY
+PSGChSide:	DS.B	6		; per channel: the side it last played on (-1 left, 1 right, 0 none yet)
+	ENDC
+	IFEQ	NO_PSGTWIN
+PSGVoiceTwin:	DS.B	4		; the voice is a channel's second (other speaker)
+PSGTwinLast:	DS.B	6		; per channel: its twin voice last frame, -1 = none
+PSGTwinNew:	DS.B	1		; voices to restart together (bit per voice)
+PSGTwinOn:	DC.B	TwinTest-1	; 0 = no twins (the Sound menu's tick: PonPrefs, TwinPick; EMBED builds: on unless TwinTest)
+	EVEN
+PSGVoicePer:	DS.W	4		; the period each voice was given
+	ENDC
 	IFEQ	NO_PSGOVER
 PSGShare:	DS.B	6		; summed on the shared voice this frame
 PSGOvN:		DS.B	1		; how many
@@ -744,7 +969,14 @@ PSGVoiceTone:
 	TST.W	D2
 	BNE.S	.f
 	MOVE.W	#$1000,D2
-.f:	MOVEQ	#0,D3			; D3 = wave level (samples 32 >> D3)
+.f:
+	IFEQ	NO_PSGLFO|NO_PSGDDA	; the LFO steps in PSGDdaFrame
+	TST.W	D6
+	BNE.S	.nolf
+	BSR	PSGLfoMod		; channel 0: the LFO's bend
+.nolf:
+	ENDC
+	MOVEQ	#0,D3			; D3 = wave level (samples 32 >> D3)
 	CMP.W	#126,D2
 	BCC.S	.lv
 	MOVEQ	#1,D3
@@ -760,7 +992,10 @@ PSGVoiceTone:
 	CMP.W	#8,D2
 	BCS.S	.mute			; above ~14 kHz
 .lv:	LSL.W	D3,D2
-	MULU.W	#64935,D2		; * 3546895 / 3579545 (65536ths)
+	MULU.W	#64938,D2		; * 3546895 / 3579545 (65536ths)
+	IFEQ	NO_PSGROUND
+	ADD.L	#$8000,D2		; to the nearest count
+	ENDC
 	SWAP	D2
 	CMP.W	#124,D2
 	BCC.S	.p
@@ -773,6 +1008,9 @@ PSGVoiceTone:
 	MOVE.L	A2,(A1)			; AUDxLC (taken at the end of the current loop)
 	MOVE.W	(PSGLevLen.W,PC,D3.W*2),4(A1)	; AUDxLEN
 	MOVE.W	D2,6(A1)		; AUDxPER
+	IFEQ	NO_PSG6|NO_PSGTWIN
+	MOVE.W	D2,(PSGVoicePer.L,D7.W*2)
+	ENDC
 	MOVE.W	D1,8(A1)		; AUDxVOL
 	IFNE	PSGLog
 	MOVE.W	(PSGLevLen.W,PC,D3.W*2),D4
@@ -800,7 +1038,10 @@ PSGVoiceNoise:
 	LSL.W	#6,D2
 	BNE.S	.per
 	MOVEQ	#32,D2
-.per:	MULU.W	#64935,D2
+.per:	MULU.W	#64938,D2
+	IFEQ	NO_PSGROUND
+	ADD.L	#$8000,D2
+	ENDC
 	SWAP	D2
 	CMP.W	#124,D2
 	BCC.S	.p
@@ -1090,7 +1331,8 @@ PSGVoiceDda:
 ; of 264 samples, one per scanline as a DDA buffer, and queued as stream 6;
 ; PSGVoiceDda and PSGAudInt then play it like a DDA channel at volume 64.
 ; Steps per sample: PSGDdaPer colour clocks over the channel's divider (PSG
-; clock = the NTSC colour clock; on a PAL screen x 1.0092). Uses D0-D6/A0-A4.
+; clock = the NTSC colour clock, Paula's the PAL one: x 1.0092; NO_SHPITCH=1:
+; only on a PAL screen, 16 cents flat on the others). Uses D0-D6/A0-A4.
 PSGVoiceShared:
 	LEA	$A0(A6),A1
 	MOVE.W	D7,D0
@@ -1103,6 +1345,13 @@ PSGVoiceShared:
 	CMP.W	#6,D2
 	BCC	.start			; full: this frame is dropped
 	MOVEM.L	D0/D2/D7/A1,-(SP)
+	IFEQ	NO_SHCONT
+	MOVE.W	#264-1,PSGShN
+	CMP.W	#2,D2
+	BCS.S	.n264
+	MOVE.W	#262-1,PSGShN		; this one will be queued short (below): make 262, so the waves go on from
+.n264:					; where Paula stops (264 made, 262 played = a phase jump in every summed tone)
+	ENDC
 	LEA	PSGShAcc,A4
 	MOVE.W	#264/2-1,D1
 .clr:	CLR.L	(A4)+
@@ -1111,11 +1360,31 @@ PSGVoiceShared:
 	MOVE.W	PSGDdaPer,D7
 	MOVE.L	D7,D0
 	SWAP	D7
+	IFNE	NO_SHPITCH
 	CMP.W	#250,D0
 	BCS.S	.ntsc
+	ENDC				; Paula's clock is the PAL one on every screen (as PSGVoice's x 64938):
 	MULU.W	#604,D0			; PAL: x 66140 / 65536
 	ADD.L	D0,D7
 .ntsc:	MOVE.L	D7,PSGShX
+	IFEQ	ShNormOff
+	CLR.W	PSGShVol		; the shared channels' volumes summed (the voice's volume, 64 at most)
+	MOVEQ	#0,D6
+	MOVEQ	#0,D1
+.sv:	TST.B	(PSGShare.L,D6.W)
+	BEQ.S	.sv2
+	LEA	PSGBuffer,A0
+	MOVE.W	D6,D0
+	LSL.W	#3,D0
+	ADD.W	D0,A0
+	BSR	PSGAtten
+	ADD.W	D1,PSGShVol
+.sv2:	MOVE.W	D1,(PSGShV.L,D6.W*2)	; one snapshot: the game may write a volume in between (this runs in the vblank)
+	MOVEQ	#0,D1
+	ADDQ.W	#1,D6
+	CMP.W	#6,D6
+	BNE.S	.sv
+	ENDC
 	MOVEQ	#0,D6
 .ch:	TST.B	(PSGShare.L,D6.W)
 	BEQ	.nch
@@ -1123,9 +1392,18 @@ PSGVoiceShared:
 	MOVE.W	D6,D0
 	LSL.W	#3,D0
 	ADD.W	D0,A0
+	IFEQ	ShNormOff
+	MOVEQ	#0,D1			; (DIVU.W below divides all 32 bits)
+	MOVE.W	(PSGShV.L,D6.W*2),D1	; the volume summed above (never more than PSGShVol)
+	ELSE
 	BSR	PSGAtten		; D1 = Paula volume (uses D0-D5)
+	ENDC
 	TST.W	D1
 	BEQ	.nch
+	IFEQ	ShNormOff
+	LSL.W	#7,D1			; this channel's part of the voice, in 128ths: the sum
+	DIVU.W	PSGShVol,D1		; uses all 8 bits, Paula's volume scales it (as an own voice); the parts add up to 128 at most
+	ENDC
 	MOVE.W	D1,A2			; volume
 	MOVE.L	PSGShX,D7
 	CMP.W	#4,D6
@@ -1160,7 +1438,11 @@ PSGVoiceShared:
 	MOVE.L	(PSGShPh.L,D6.W*4),D2	; position
 	MOVE.W	A2,D5			; volume
 	LEA	PSGShAcc,A4
+	IFEQ	NO_SHCONT
+	MOVE.W	PSGShN,D1
+	ELSE
 	MOVE.W	#264-1,D1
+	ENDC
 .s:	ADD.L	D7,D2
 	MOVE.L	D2,D3
 	SWAP	D3
@@ -1184,7 +1466,15 @@ PSGVoiceShared:
 	MOVE.W	#262/2,D3		; 3 or more waiting with this one: shorter, to drain
 .len:	MOVE.W	D3,(PSGRingLen.L,D1.W*2)
 	IFEQ	NO_DDAQUEUE
+	IFEQ	ShNormOff
+	MOVE.W	PSGShVol,D3
+	CMP.W	#64,D3
+	BLS.S	.v64
+	MOVEQ	#64,D3			; louder than one voice can be: the sum is scaled down, not clipped
+.v64:	MOVE.W	D3,(PSGRingVol.L,D1.W*2)
+	ELSE
 	MOVE.W	#64,(PSGRingVol.L,D1.W*2)
+	ENDC
 	ENDC
 	IFEQ	NO_DDASTRETCH
 	MOVE.W	PSGDdaPer,(PSGRingPer.L,D1.W*2)
@@ -1197,13 +1487,23 @@ PSGVoiceShared:
 	MOVEQ	#127,D4
 	MOVE.W	#-128,D5
 .b:	MOVE.W	(A4)+,D3
+	IFEQ	ShNormOff
+	ASR.W	#7,D3
+	ELSE
 	ASR.W	#6,D3
+	ENDC
 	CMP.W	D4,D3
 	BLE.S	.b1
 	MOVE.W	D4,D3
+	IFNE	PSGLog
+	ADDQ.W	#1,PSGShClip
+	ENDC
 .b1:	CMP.W	D5,D3
 	BGE.S	.b2
 	MOVE.W	D5,D3
+	IFNE	PSGLog
+	ADDQ.W	#1,PSGShClip
+	ENDC
 .b2:	MOVE.B	D3,(A3)+
 	DBF	D1,.b
 	ADDQ.B	#1,D0
@@ -1212,6 +1512,13 @@ PSGVoiceShared:
 .start:	MOVEQ	#6,D6
 	BRA	PSGVoiceDda		; starts the stream if the voice isn't streaming it yet
 PSGShX:	DC.L	0
+	IFEQ	NO_SHCONT
+PSGShN:	DC.W	264-1		; samples to make this frame, less one
+	ENDC
+	IFEQ	ShNormOff
+PSGShVol:	DC.W	0
+PSGShV:		DS.W	6		; each shared channel's volume this frame
+	ENDC
 	ENDC
 
 PSGAudBit:	DC.W	$0080,$0100,$0200,$0400
@@ -1390,6 +1697,73 @@ PSGServe:
 	MOVE.W	#264/2,4(A1)
 	RTS
 
+	IFEQ	NO_PSGLFO
+; The LFO ($0808 frequency, $0809 control): channel 1's wave index steps every
+; F1 * LFO frequency clocks at 3.58 MHz (LFO frequency 0 = 256), and its sample
+; (0-31, less 16) is added to channel 0's F: x1, x4, x16 for modes 1-3, a 12-bit
+; sum (NO_LFOWRAP=0: past 0 or $FFF it wraps). Bit 7
+; holds it at the start. Channel 1 itself is silent (PSGChScore). Here the
+; index moves once a PCE frame and channel 0's period once an Amiga frame:
+; vibrato, not the audio-rate bends of very fast settings (left out). Uses D0-D2/A0.
+PSGLfoStep:
+	MOVE.B	PSGLfo+1,D0
+	BMI.S	.rst
+	AND.B	#3,D0
+	BEQ.S	.x
+	LEA	PSGBuffer+8,A0		; channel 1
+	MOVEQ	#0,D1
+	MOVE.B	3(A0),D1
+	AND.B	#$0F,D1
+	LSL.W	#8,D1
+	MOVE.B	2(A0),D1
+	TST.W	D1
+	BNE.S	.f
+	MOVE.W	#$1000,D1
+.f:	MOVEQ	#0,D2
+	MOVE.B	PSGLfo,D2
+	BNE.S	.g
+	MOVE.W	#256,D2
+.g:	MULU.W	D2,D1
+	MOVE.L	#59832<<16,D0		; 3.58 MHz clocks a PCE frame, 16.16
+	DIVU.L	D1,D0
+	MOVE.L	D0,PSGLfoInc
+	ADD.L	D0,PSGLfoPh
+.x:	RTS
+.rst:	CLR.L	PSGLfoPh
+	RTS
+
+; D2.w = channel 0's F -> bent by the LFO (1..$1000). Keeps the rest.
+PSGLfoMod:
+	MOVEM.L	D0-D1,-(SP)
+	MOVE.B	PSGLfo+1,D0
+	BMI.S	.x
+	AND.W	#3,D0
+	BEQ.S	.x
+	CMP.L	#$80000,PSGLfoInc
+	BCC.S	.x			; over 8 steps a frame: can't follow it
+	MOVE.W	PSGLfoPh,D1
+	AND.W	#31,D1
+	MOVE.B	(PSGWave+32.L,D1.W),D1
+	SUB.W	#16,D1
+	SUBQ.W	#1,D0
+	ADD.W	D0,D0
+	ASL.W	D0,D1
+	ADD.W	D1,D2
+	IFEQ	NO_LFOWRAP
+	AND.W	#$FFF,D2		; a 12-bit sum: past 0 or $FFF it wraps, 0 = $1000
+	BNE.S	.x
+	MOVE.W	#$1000,D2
+	ELSE
+	BGT.S	.lo
+	MOVEQ	#1,D2
+.lo:	CMP.W	#$FFF,D2
+	BLS.S	.x
+	MOVE.W	#$FFF,D2
+	ENDC
+.x:	MOVEM.L	(SP)+,D0-D1
+	RTS
+	ENDC
+
 ; Once per PCE frame (main loop, after PCE_Start; keeps all registers).
 PSGDdaFrame:
 	IFEQ	MixOff
@@ -1399,6 +1773,9 @@ PSGDdaFrame:
 .noMix:
 	ENDC
 	MOVEM.L	D0-D6/A0-A1,-(SP)
+	IFEQ	NO_PSGLFO
+	BSR	PSGLfoStep
+	ENDC
 	IFEQ	NO_DDASTRETCH
 	MOVE.L	vTimerVBlanks,D0	; Amiga frames since the last PCE frame (1 at full rate)
 	MOVE.L	D0,D1
@@ -2068,6 +2445,13 @@ PSGLog_q:
 	CMP.W	#6,D7
 	BNE	PSGLog_q
 	ENDC
+	LogString " s:"
+	LogHexWord PSGShClip		; shared voice: samples clamped since the last line
+	CLR.W	PSGShClip
+	IFEQ	NO_PSGTWIN
+	LogString " w:"
+	LogHexLong PSGVoiceTwin		; per voice: a channel's second voice
+	ENDC
 	LogString " t:"
 	LogHexLong vTimerVBlanks
 	IFEQ	NO_PSGDDA
@@ -2104,11 +2488,17 @@ PSGLogTxt:	DC.B	"0:",0
 PSGLogInit:	DC.B	0
 	EVEN
 PSGDdaCnt:	DS.B	8
+PSGShClip:	DC.W	0
 	ENDC
 
 PSGSel:		DC.B	0		; $0800 channel select
 PSGMaster:	DC.B	0		; $0801 master balance
 PSGLfo:		DC.B	0,0		; $0808 LFO frequency, $0809 LFO control
+	IFEQ	NO_PSGLFO
+	EVEN
+PSGLfoPh:	DC.L	0		; channel 1's wave index as the LFO, 16.16
+PSGLfoInc:	DC.L	0		; its step a PCE frame
+	ENDC
 PSGWaveIdx:	DS.B	8
 PSGWaveDirty:	DS.B	8
 PSGWave:	DS.B	6*32

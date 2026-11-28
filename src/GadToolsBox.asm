@@ -902,7 +902,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
 	IFEQ	NO_REL251
+	IFEQ	NO_REL26
+    DC.B    'AmiPC-Engine Emulator v2.6'
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5.1'
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5'
 	ENDC
@@ -946,7 +950,11 @@ MainMenuWTitle:
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
 	IFEQ	NO_REL251
+	IFEQ	NO_REL26
+    DC.B    'AmiPC-Engine Emulator v2.6'
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5.1'
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5'
 	ENDC
@@ -2045,7 +2053,11 @@ AboutIText0:
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
 	IFEQ	NO_REL251
+	IFEQ	NO_REL26
+    DC.B    'AmiPC-Engine Emulator v2.6',0
+	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5.1',0
+	ENDC
 	ELSE
     DC.B    'AmiPC-Engine Emulator v2.5',0
 	ENDC
@@ -2088,7 +2100,11 @@ AboutIText1:
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
 	IFEQ	NO_REL251
+	IFEQ	NO_REL26
+    DC.B    '(28 November 2026)',0
+	ELSE
     DC.B    '(26 November 2026)',0
+	ENDC
 	ELSE
     DC.B    '(23 November 2026)',0
 	ENDC
@@ -2131,7 +2147,11 @@ AboutITextZ:
 	IFEQ	NO_REL24
 	IFEQ	NO_REL25
 	IFEQ	NO_REL251
+	IFEQ	NO_REL26
+    DC.B    'Version 2.6: z00p',0
+	ELSE
     DC.B    'Version 2.5.1: z00p',0
+	ENDC
 	ELSE
     DC.B    'Version 2.5: z00p',0
 	ENDC
@@ -2659,11 +2679,12 @@ MainMenuNewMenu0:
     DC.W    $0000
     DC.L    0,0
 	IFEQ	MixOff
-    DC.B    1,0			; Sound: one of two ticked (PonPrefs, SndPick0/1)
+    DC.B    1,0			; Sound (PonPrefs; SndPick0/1: one of two ticked)
     DC.L    MainMenuMNameSnd
     DC.L    0
     DC.W    $0000
     DC.L    0,0
+	IFEQ	HuMixOff
 MainMenuNewSnd0:
     DC.B    2,0
     DC.L    MainMenuMNameSnd0
@@ -2676,12 +2697,23 @@ MainMenuNewSnd1:
     DC.L    0
     DC.W    $0001
     DC.L    1,0
+	ENDC
+	IFEQ	TwinTickOff
+MainMenuNewTwin:
+    DC.B    2,0			; Centred in both speakers: a tick of its own (CHECKIT, MENUTOGGLE)
+    DC.L    MainMenuMNameTwin
+    DC.L    0
+    DC.W    $0009
+    DC.L    0,0
+	ENDC
 	IFEQ	NO_CDMOFF
+	IFEQ	HuMixOff&TwinTickOff
     DC.B    2,0
     DC.L    $FFFFFFFF
     DC.L    0
     DC.W    $0000
     DC.L    0,0
+	ENDC
 MainMenuNewCdm:
     DC.B    2,0			; CD music: a tick of its own (CHECKIT, MENUTOGGLE)
     DC.L    MainMenuMNameCdm
@@ -2783,10 +2815,14 @@ MainMenuMName16:
     DC.B    'Cartridges  ',0
 MainMenuMNameSnd:
     DC.B    'Sound  ',0
+	IFEQ	HuMixOff
 MainMenuMNameSnd0:
     DC.B    'Original stereo',0
 MainMenuMNameSnd1:
     DC.B    'Full channel mix',0
+	ENDC
+MainMenuMNameTwin:
+    DC.B    'Centred in both speakers',0
 	IFEQ	NO_CDMOFF
 MainMenuMNameCdm:
     DC.B    'CD music',0

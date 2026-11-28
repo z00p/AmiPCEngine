@@ -4,6 +4,33 @@ AmiPCEngine is built from the sources of AmiPC-Engine v0.5 (June 1st,
 2021) by Juan Antonio Gomez Galvez. This file lists what changed for the
 user, grouped. His v0.3 preview (Aminet, 2020) had fewer features still.
 
+## New in 2.6
+
+- Sound, HuCards: with five or six channels playing, the quietest are
+  mixed together onto one Amiga voice (the shared voice). Since 2.4
+  that voice played 16 cents flat against the other three, which
+  sounded sour, like distortion on one side. It is in tune now, and it
+  no longer skips two samples now and then.
+- Sound menu: "Centred in both speakers", ticked by default. A
+  HuCard's centred channel also plays on a free voice on the other
+  side, so it is heard in the middle. Not ticked: one speaker only, as
+  in 2.5.1. Save Prefs keeps it.
+- Sound, HuCards: channels keep their side and their voice more
+  steadily, pitches are rounded to the nearest step, and the LFO
+  (vibrato) is played, its deepest settings reaching the lowest notes
+  as on the PC Engine.
+- The Full channel mix for HuCards is gone (the Sound menu choice and
+  the SOUNDMIX word, which is now ignored): HuCards play on Paula's
+  voices. CD games still play through the mix, which now goes silent
+  at the sound chip's quietest setting.
+- RTG menu: on a 1920x1080 Picasso96 mode (else 1280x720) the menu
+  opens at that size, with a large font and redrawn pictures. Without
+  those modes it opens at double height as before. The line
+  Menu = Classic in a text file AmiPCEngine.config in the drawer gives
+  the old menu. The game picture is unchanged.
+- Blended scanlines: the darker lines are rounded down, as in the
+  other emulators, so they are a shade darker.
+
 ## New in 2.5.1
 
 - AGA: on an NTSC screen with a CD32 pad, the lower part of the

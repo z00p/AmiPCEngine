@@ -27,6 +27,18 @@ what he started: all 6 sound channels with DDA samples, every sprite palette
 on an RTG screen, and full speed on an A1200 with a PiStorm. His
 v0.3 stays on Aminet as it is.
 
+New in 2.6
+----------
+Sound: with five or six channels playing on a HuCard, the notes mixed
+onto the shared Amiga voice played slightly flat since 2.4 and sounded
+sour; they are in tune now. A new Sound menu tick, "Centred in both
+speakers" (on by default), plays a centred channel in both speakers
+when a voice is free; untick it for 2.5.1's one-speaker placement.
+Vibrato (the LFO) is played. The Full channel mix for HuCards is gone;
+CD games still use the mix. RTG menu: on a 1920x1080 or 1280x720
+Picasso96 mode the menu opens at that size with a large font. Blended
+scanlines are a shade darker. See CHANGES.txt.
+
 New in 2.5.1
 ------------
 AGA on an NTSC screen with a CD32 pad: the lower part of the picture
@@ -162,7 +174,7 @@ The full list is in ReadMe.txt.
 Credits
 -------
 AmiPC-Engine by Juan Antonio Gomez Galvez (GUS Entertainment). Versions
-1.0 to 2.5.1 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
+1.0 to 2.6 by z00p. Web and menu graphics: Multivac. CD32 pad reading:
 Afrotechmods / FAmiga. Thanks to Zener
 and Sandman, and to reassembler for his guidance and direction.
 

@@ -5,7 +5,7 @@
 #   sh build.sh debug     release build with the debug rows (-DDbgRows=1), to build/AmiPCEngine_Debug
 #   sh build.sh colour    the program that ships since 2.0 (-DAGC=1: AGA in the PC Engine's colours, RTG with the word RTG), to build/AmiPCEngine_Colour
 #   sh build.sh colourdebug  the same with the debug rows, to build/AmiPCEngine_ColourDebug
-# OUT=path overrides the output file.
+# OUT=path overrides the output file. DEFS="-DNO_PSGTWIN=0 ..." adds assembler switches (A/B test builds).
 # Every build gets a build number, the commit count, in the window title ("v2.3 build 455").
 # NAME="Keep Sides" names a test build: the window title gets the name, "test build", the
 # number, the date and the commit, in any mode but release (A/B builds you can tell apart).
@@ -26,7 +26,7 @@ if [ -n "$NAME" ]; then
   [ "$1" = release ] && { echo "NAME is for test builds, not release"; exit 1; }
   defs=$(echo "$defs" | sed 's/-DNO_BUILDINFO=1//')
 fi
-defs="$defs -DBUILDNUM=$num"
+defs="$defs -DBUILDNUM=$num $DEFS"
 cd src && ../tools/vasmm68k_mot.exe -devpac -nocase -m68020 -Fhunkexe -nosym -maxerrors=0 \
   $defs -o "../$out" Build.asm > ../build/build.log 2>&1
 rc=$?

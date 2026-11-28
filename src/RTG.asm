@@ -186,6 +186,14 @@ RtgStart:
 	ENDC
 	ENDC
 	IFEQ	NO_RTGMENU
+	IFEQ	BigOff
+	JSR	bm_init			; the big menu (BigMenu.asm): 1920x1080, then 1280x720
+	TST.B	bm_on
+	BEQ.S	.small			; (none, or "Menu = Classic": the menu as before)
+	ST	RtgMenuOn
+	BRA	.x
+.small:
+	ENDC
 	MOVEQ	#1,D7			; the menu's (8-bit, >= 640x212)
 	BSR	RtgFind
 	MOVE.L	D0,RtgMModeID
@@ -325,7 +333,7 @@ RtgToolType:
 	BSR	RtgModeVal
 .fm:
 	ENDC
-	IFEQ	MixOff
+	IFEQ	HuMixOff
 	MOVE.L	D4,A0			; SOUNDMIX
 	MOVE.L	$36(A0),A0
 	LEA	RtgMixNom(PC),A1
@@ -751,6 +759,12 @@ TallNG:
 .x:	RTS
 ; DrawBevelBoxA: D1 = y + the window's BorderTop D5, D3 = height. A6 = GadTools.
 TallBevel:
+	IFEQ	BigOff
+	TST.B	bm_on			; the big menu: the bevel at its scaled place
+	BEQ.S	.sm
+	JMP	bm_bevel
+.sm:
+	ENDC
 	TST.B	RtgTall
 	BEQ.S	.x
 	ADD.W	D1,D1
@@ -782,6 +796,12 @@ TallIText:
 ; + the screen font's height, as Menu.asm works it out): the picture at double
 ; height, at 2 x its y under the window's taller title bar. A6 = Intuition.
 TallImage:
+	IFEQ	BigOff
+	TST.B	bm_on			; the big menu: the redrawn picture
+	BEQ.S	.sm
+	JMP	bm_drawimage
+.sm:
+	ENDC
 	TST.B	RtgTall
 	BEQ.S	.n
 	MOVEM.L	D1-D2/A0-A2,-(SP)
@@ -3061,7 +3081,7 @@ RtgScanPrep:
 	LSR.L	#2,D0			; x (4 - n) / 4
 	BRA.S	.c1
 	IFEQ	NO_BLENDLV
-.q:	MOVEQ	#2,D4			; Blended x 0.50: h = (m v + 4) / 8
+.q:	MOVEQ	#2,D4			; Blended x 0.50: h = m v / 8, rounded down (NO_BLENDTRUNC=1: (m v + 4) / 8)
 	CMP.B	#4,D6
 	BEQ.S	.q1
 	MOVEQ	#3,D4			; light x 0.75
@@ -3069,7 +3089,9 @@ RtgScanPrep:
 	BEQ.S	.q1
 	MOVEQ	#1,D4			; strong x 0.25
 .q1:	MULU.W	D4,D0
+	IFNE	NO_BLENDTRUNC
 	ADDQ.L	#4,D0
+	ENDC
 	LSR.L	#3,D0
 	ELSE
 .q:	LSR.L	#2,D0			; Blended: a quarter
@@ -3161,7 +3183,7 @@ RtgScanVal:
 ; RtgWordsCli: A0 = the CLI arguments; SOUNDMIX and PLAINNTSC anywhere (any case).
 RtgWordsCli:
 	MOVEM.L	D0-D1/A1-A2,-(SP)
-	IFEQ	MixOff
+	IFEQ	HuMixOff
 	LEA	RtgMixNom(PC),A2
 	BSR.S	RtgWord
 	BEQ.S	.p
